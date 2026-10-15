@@ -1,0 +1,24 @@
+{
+  "id": "URD-CORE-001",
+  "phase": "urd",
+  "title": "Motor de Especificación Atómica y Trazabilidad ESA PSS-05",
+  "description": "El sistema MOM debe permitir declarar especificaciones atómicas en formato JSON agrupadas por las fases URD, SRD, ADD y DDD del estándar ESA PSS-05, garantizando trazabilidad bidireccional y resolución de herencia DAG entre proyectos sin dependencias externas.",
+  "parent_ids": [],
+  "child_ids": [
+    "SRD-CORE-001"
+  ],
+  "attributes": {
+    "priority": "HIGH",
+    "verification_method": "UNIT_TEST",
+    "status": "DRAFT",
+    "is_user_doc": true,
+    "extra": {}
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOM",
+    "ai_guardrails": "NINGÚN agente de IA puede modificar la estructura de carpetas data/ ni omitir las validaciones de trazabilidad ESA sin confirmación explícita del usuario humano.",
+    "created_at": null,
+    "updated_at": null
+  }
+}

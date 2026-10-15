@@ -1,0 +1,24 @@
+{
+  "id": "SRD-CORE-001",
+  "phase": "srd",
+  "title": "Persistencia JSON Atómica y Trazabilidad por Grafo Directed Acyclic Graph",
+  "description": "El motor debe almacenar cada ítem en src//.json y verificar que todo ítem de fase SRD, ADD o DDD tenga asignado obligatoriamente al menos un parent_id existente en el grafo.",
+  "parent_ids": [
+    "URD-CORE-001"
+  ],
+  "child_ids": [],
+  "attributes": {
+    "priority": "HIGH",
+    "verification_method": "UNIT_TEST",
+    "status": "DRAFT",
+    "is_user_doc": false,
+    "extra": {}
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOM",
+    "ai_guardrails": null,
+    "created_at": null,
+    "updated_at": null
+  }
+}

@@ -7,17 +7,70 @@ from schemas import MOMItem, ESAPhase
 class ProjectManager:
     def __init__(self, data_dir: Optional[Path] = None) -> None:
         if data_dir is None:
-            root_dir = Path(__file__).resolve().parent.parent
-            self.data_dir = root_dir / "data" / "projects"
-            self.ai_proposals_dir = root_dir / "data" / "ai-proposals"
+            # Ubica 'data' dinámicamente en la raíz del repositorio MOM (sube 2 niveles desde mom-py)
+            self.root_dir = Path(__file__).resolve().parent.parent
+            self.data_dir = self.root_dir / "data" / "projects"
+            self.ai_proposals_dir = self.root_dir / "data" / "ai-proposals"
+            self.global_templates_dir = self.root_dir / "data" / "templates"
         else:
+            self.root_dir = data_dir.parent.parent
             self.data_dir = data_dir
             self.ai_proposals_dir = data_dir.parent / "ai-proposals"
+            self.global_templates_dir = data_dir.parent / "templates"
 
+        self.gitignore_path = self.root_dir / ".gitignore"
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.ai_proposals_dir.mkdir(parents=True, exist_ok=True)
+        self.global_templates_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_default_templates()
 
-    def create_project(self, project_name: str, parent_projects: Optional[List[str]] = None, target_docs_dir: Optional[str] = None) -> Path:
+    def _ensure_default_templates(self) -> None:
+        """Crea las plantillas agnósticas por defecto en data/templates/ si no existen."""
+        default_urd = """# Documento de Requisitos de Usuario (URD) - {{PROJECT_NAME}}\n\n## 1. Introducción y Alcance\nEste documento define los Requisitos de Usuario para el proyecto **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Usuario\n{{MOM_ATOMIC_ITEMS}}\n"""
+        default_srd = """# Documento de Requisitos de Software (SRD) - {{PROJECT_NAME}}\n\n## 1. Introducción y Alcance\nEste documento especifica las capacidades funcionales y no funcionales para **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Software\n{{MOM_ATOMIC_ITEMS}}\n"""
+        default_add = """# Documento de Diseño Arquitectónico (ADD) - {{PROJECT_NAME}}\n\n## 1. Arquitectura General\nDefinición de componentes y límites del sistema para **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Arquitectura\n{{MOM_ATOMIC_ITEMS}}\n"""
+        default_ddd = """# Documento de Diseño Detallado (DDD) - {{PROJECT_NAME}}\n\n## 1. Diseño Estructurado\nDetalle de implementación e interfaces internas para **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Diseño Detallado\n{{MOM_ATOMIC_ITEMS}}\n"""
+        default_index = """---\nproject: "{{PROJECT_NAME}}"\ntype: "vault-index"\n---\n\n# Vault de Navegación ESA PSS-05: {{PROJECT_NAME}}\n\nBienvenido al espacio de documentación navegable del proyecto **{{PROJECT_NAME}}**.\n\n## Documentos de Fase Completos\n* [[URD]]: Documento de Requisitos de Usuario\n* [[SRD]]: Documento de Requisitos de Software\n* [[ADD]]: Documento de Diseño Arquitectónico\n* [[DDD]]: Documento de Diseño Detallado\n\n## Trazabilidad y Herencia DAG\n* **Cadena de Herencia:** {{INHERITANCE_CHAIN}}\n"""
+
+        templates = {
+            "URD.md.template": default_urd,
+            "SRD.md.template": default_srd,
+            "ADD.md.template": default_add,
+            "DDD.md.template": default_ddd,
+            "INDEX.md.template": default_index,
+        }
+
+        for filename, content in templates.items():
+            tpl_path = self.global_templates_dir / filename
+            if not tpl_path.exists():
+                with open(tpl_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+
+    def sync_gitignore_privacy(self, project_name: str, is_private: bool) -> None:
+        """Añade o elimina la ruta del proyecto privado en el archivo .gitignore raíz."""
+        if not self.gitignore_path.exists():
+            return
+
+        rule = f"data/projects/{project_name}/"
+        with open(self.gitignore_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        rule_exists = any(line.strip() == rule for line in lines)
+
+        if is_private and not rule_exists:
+            # Añadir la regla de exclusión al final del gitignore
+            if lines and not lines[-1].endswith("\n"):
+                lines.append("\n")
+            lines.append(f"{rule}\n")
+            with open(self.gitignore_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+        elif not is_private and rule_exists:
+            # Eliminar la regla de exclusión si pasó a ser público
+            new_lines = [line for line in lines if line.strip() != rule]
+            with open(self.gitignore_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+    def create_project(self, project_name: str, parent_projects: Optional[List[str]] = None, target_docs_dir: Optional[str] = None, is_private: bool = False) -> Path:
         proj_dir = self.data_dir / project_name
         if proj_dir.exists():
             raise FileExistsError(f"El proyecto '{project_name}' ya existe.")
@@ -27,15 +80,20 @@ class ProjectManager:
         
         (proj_dir / "doc").mkdir(parents=True, exist_ok=True)
         (proj_dir / "vault").mkdir(parents=True, exist_ok=True)
+        (proj_dir / "templates").mkdir(parents=True, exist_ok=True)
         
         meta = {
             "name": project_name,
             "version": "0.1.0",
+            "is_private": is_private,
             "parent_projects": parent_projects or [],
             "target_docs_dir": target_docs_dir or ""
         }
         with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
+
+        # Sincronizar estado con .gitignore
+        self.sync_gitignore_privacy(project_name, is_private)
 
         return proj_dir
 
@@ -71,10 +129,12 @@ class MOMInheritedRepository:
         self.project_dir = pm.data_dir / project_name
         
         self.target_docs_dir: Optional[Path] = None
+        self.is_private: bool = False
         proj_json = self.project_dir / "project.json"
         if proj_json.exists():
             with open(proj_json, "r", encoding="utf-8") as f:
                 data = json.load(f)
+                self.is_private = data.get("is_private", False)
                 target_raw = data.get("target_docs_dir", "").strip()
                 if target_raw:
                     self.target_docs_dir = Path(target_raw)
@@ -96,4 +156,4 @@ class MOMInheritedRepository:
                             items[item.id] = item
         return items
 
-# Version: 0.2.7
+# Version: 0.3.0
