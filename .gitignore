@@ -214,7 +214,7 @@ __marimo__/
 # ==========================================
 
 # Almacenamiento dinámico de proyectos (creado automáticamente en tiempo de ejecución)
-data/
+# data/ ESTO TIENE QUE ENTRAR EN EL REPO!
 
 # Artefactos específicos de compilación nativa C/C++ (mom-c)
 mom-c/build/

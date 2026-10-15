@@ -1,0 +1,23 @@
+---
+document_type: "DDD"
+standard: "ESA PSS-05"
+project: "{{PROJECT_NAME}}"
+---
+
+# Documento de Diseño Detallado (DDD)
+
+## HOJA DE CONTROL DOCUMENTAL
+* **Proyecto:** {{PROJECT_NAME}}
+* **Código de Documento:** DDD-{{PROJECT_NAME}}
+* **Estado:** Consolidado
+
+---
+
+## 1. INTRODUCCIÓN
+### 1.1 Propósito
+Definir de manera exhaustiva las estructuras de datos, firmas de interfaz, funciones y algoritmos internos para el desarrollo de **{{PROJECT_NAME}}**.
+
+---
+
+## 2. ESPECIFICACIONES ATÓMICAS DE DISEÑO DETALLADO
+{{MOM_ATOMIC_ITEMS}}

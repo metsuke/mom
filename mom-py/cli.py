@@ -30,16 +30,16 @@ def ask_confirmation(prompt: str, default: bool = False) -> bool:
             return False
         print("⚠️ Respuesta no válida. Escribe 's' o 'n'.")
 
-def _curses_multi_select(stdscr, options: List[str], preselected: List[str]) -> List[str]:
+def _curses_multi_select(stdscr, title_header: str, options: List[str], preselected: List[str]) -> List[str]:
     """Renderiza un menú TUI interactivo usando curses para marcar con espacio y confirmar con Enter."""
     curses.curs_set(0)
     stdscr.keypad(True)
-    selected = [opt in preselected for opt in options]
+    selected = [opt.split(" | ")[0] in preselected for opt in options]
     current_idx = 0
 
     while True:
         stdscr.clear()
-        stdscr.addstr(0, 0, "=== SELECCIÓN DE HERENCIA DE PROYECTOS ===", curses.A_BOLD)
+        stdscr.addstr(0, 0, f"=== {title_header} ===", curses.A_BOLD)
         stdscr.addstr(1, 0, "Usa [Flecha Arriba/Abajo] para moverte, [Espacio] para marcar/desmarcar, [Enter] para guardar.")
         stdscr.addstr(2, 0, "--------------------------------------------------------------------------------")
 
@@ -63,10 +63,9 @@ def _curses_multi_select(stdscr, options: List[str], preselected: List[str]) -> 
         elif key in [10, 13, curses.KEY_ENTER]:
             break
 
-    return [options[i] for i, is_sel in enumerate(selected) if is_sel]
+    return [options[i].split(" | ")[0] for i, is_sel in enumerate(selected) if is_sel]
 
 def select_parent_projects_interactively(pm: ProjectManager, exclude_project: Optional[str] = None, preselected: Optional[List[str]] = None) -> List[str]:
-    """Despliega el selector TUI interactivo para definir proyectos padres de herencia."""
     available = [
         p.name for p in pm.data_dir.iterdir() 
         if p.is_dir() and (p / "project.json").exists() and p.name != exclude_project
@@ -76,7 +75,27 @@ def select_parent_projects_interactively(pm: ProjectManager, exclude_project: Op
         return []
 
     try:
-        return curses.wrapper(_curses_multi_select, available, preselected or [])
+        return curses.wrapper(_curses_multi_select, "SELECCIÓN DE HERENCIA DE PROYECTOS", available, preselected or [])
+    except Exception as e:
+        print(f"⚠️ No se pudo cargar la interfaz TUI ({e}).")
+        return []
+
+def select_parent_items_interactively(inherited_repo: MOMInheritedRepository, current_phase: ESAPhase, preselected: Optional[List[str]] = None) -> List[str]:
+    """Muestra un menú TUI navegable con ID y Título para seleccionar los parent_ids de un ítem atómico."""
+    all_items = inherited_repo.list_all_consolidated()
+    
+    valid_parents = [
+        f"{item.id} | [{item.phase.value.upper()}] {item.title}"
+        for item in all_items.values()
+    ]
+
+    if not valid_parents:
+        if current_phase not in (ESAPhase.COR, ESAPhase.URD):
+            print("⚠️ No hay elementos padres disponibles. Debes crear primero un elemento en una fase previa (ej. COR o URD).")
+        return []
+
+    try:
+        return curses.wrapper(_curses_multi_select, f"SELECCIÓN DE ELEMENTOS PADRES PARA FASE {current_phase.value.upper()}", valid_parents, preselected or [])
     except Exception as e:
         print(f"⚠️ No se pudo cargar la interfaz TUI ({e}).")
         return []
@@ -88,17 +107,19 @@ def menu_create_project(pm: ProjectManager) -> None:
         print("❌ El nombre no puede estar vacío.")
         return
 
+    is_private = ask_confirmation("¿Este proyecto es PRIVADO? (Si es privado, se excluirá automáticamente en .gitignore)", default=False)
     parents = select_parent_projects_interactively(pm)
     target_docs = input("Ruta externa de exportación de docs (opcional, Enter para omitir): ").strip()
 
     print("\nResumen del nuevo proyecto:")
     print(f"  • Nombre: {name}")
+    print(f"  • Visibilidad: {'🔒 PRIVADO (Excluido en .gitignore)' if is_private else '🌐 PÚBLICO (Rastreado en Git)'}")
     print(f"  • Padres (Herencia DAG): {parents if parents else 'Ninguno (Proyecto Raíz)'}")
     print(f"  • Ruta Target Docs: {target_docs if target_docs else 'Sin exportación externa'}")
 
     if ask_confirmation("¿Deseas crear el proyecto con estos datos?"):
         try:
-            proj_dir = pm.create_project(name, parent_projects=parents, target_docs_dir=target_docs)
+            proj_dir = pm.create_project(name, parent_projects=parents, target_docs_dir=target_docs, is_private=is_private)
             print(f"✅ Proyecto '{name}' creado con éxito en: {proj_dir}")
         except Exception as e:
             print(f"❌ Error al crear proyecto: {e}")
@@ -106,7 +127,7 @@ def menu_create_project(pm: ProjectManager) -> None:
         print("🛑 Operación cancelada por el usuario.")
 
 def menu_configure_project(pm: ProjectManager) -> None:
-    print("\n--- ⚙️ CONFIGURAR PROYECTO (HERENCIA Y RUTA TARGET) ---")
+    print("\n--- ⚙️ CONFIGURAR PROYECTO (VISIBILIDAD, HERENCIA Y RUTA TARGET) ---")
     projects = [p.name for p in pm.data_dir.iterdir() if p.is_dir() and (p / "project.json").exists()]
     if not projects:
         print("❌ No hay proyectos registrados.")
@@ -129,21 +150,30 @@ def menu_configure_project(pm: ProjectManager) -> None:
 
     current_parents = meta.get("parent_projects", [])
     current_target = meta.get("target_docs_dir", "")
+    current_private = meta.get("is_private", False)
 
     print(f"\nConfiguración actual de '{target_project}':")
+    print(f"  • Visibilidad: {'🔒 PRIVADO' if current_private else '🌐 PÚBLICO'}")
     print(f"  • Padres: {current_parents if current_parents else 'Ninguno'}")
     print(f"  • Ruta Target Docs: {current_target if current_target else 'Sin configurar'}")
 
     print("\n¿Qué deseas modificar?")
-    print("  [1] Modificar proyectos padres (Herencia)")
-    print("  [2] Modificar ruta target de exportación de docs")
+    print("  [1] Cambiar visibilidad (Público / Privado en .gitignore)")
+    print("  [2] Modificar proyectos padres (Herencia DAG)")
+    print("  [3] Modificar ruta target de exportación de docs")
     print("  [0] Cancelar")
 
-    opt = input("Opción [0-2]: ").strip()
+    opt = input("Opción [0-3]: ").strip()
     if opt == "1":
+        new_private = not current_private
+        meta["is_private"] = new_private
+        pm.sync_gitignore_privacy(target_project, new_private)
+        status_str = "🔒 PRIVADO (regla añadida a .gitignore)" if new_private else "🌐 PÚBLICO (regla eliminada de .gitignore)"
+        print(f"ℹ️ Visibilidad ajustada a: {status_str}")
+    elif opt == "2":
         new_parents = select_parent_projects_interactively(pm, exclude_project=target_project, preselected=current_parents)
         meta["parent_projects"] = new_parents
-    elif opt == "2":
+    elif opt == "3":
         new_target = input("Introduce la nueva ruta target (o pulsa Enter para limpiar/desactivar): ").strip()
         meta["target_docs_dir"] = new_target
     else:
@@ -173,11 +203,12 @@ def menu_create_item(pm: ProjectManager) -> None:
         print("❌ Selección no válida.")
         return
 
+    inherited_repo = MOMInheritedRepository(pm, target_project)
     repo = MOMRepository(pm.data_dir / target_project)
 
-    print("\nFases ESA PSS-05 disponibles: [1] URD  [2] SRD  [3] ADD  [4] DDD")
-    phase_map = {"1": ESAPhase.URD, "2": ESAPhase.SRD, "3": ESAPhase.ADD, "4": ESAPhase.DDD}
-    p_choice = input("Selecciona la fase [1-4]: ").strip()
+    print("\nFases ESA/MOM disponibles: [0] COR  [1] URD  [2] SRD  [3] ADD  [4] DDD")
+    phase_map = {"0": ESAPhase.COR, "1": ESAPhase.URD, "2": ESAPhase.SRD, "3": ESAPhase.ADD, "4": ESAPhase.DDD}
+    p_choice = input("Selecciona la fase [0-4]: ").strip()
     if p_choice not in phase_map:
         print("❌ Fase no válida.")
         return
@@ -185,10 +216,15 @@ def menu_create_item(pm: ProjectManager) -> None:
 
     item_id = input(f"ID del ítem (debe empezar con '{phase.value.upper()}-', ej. {phase.value.upper()}-CORE-001): ").strip()
     title = input("Título del elemento: ").strip()
-    description = input("Descripción detallada del requisito / diseño: ").strip()
+    description = input("Descripción detallada del requisito / axioma / diseño: ").strip()
 
-    parents_raw = input("IDs de elementos padres (parent_ids separados por coma, obligatorio si no es URD): ").strip()
-    parent_ids = [p.strip() for p in parents_raw.split(",") if p.strip()] if parents_raw else []
+    parent_ids: List[str] = []
+    if phase not in (ESAPhase.COR, ESAPhase.URD):
+        print("\nSelecciona los elementos padres de los que hereda este ítem:")
+        parent_ids = select_parent_items_interactively(inherited_repo, current_phase=phase)
+    elif phase == ESAPhase.URD:
+        if ask_confirmation("¿Deseas vincular este URD con algún axioma del CORPUS o elemento existente?", default=False):
+            parent_ids = select_parent_items_interactively(inherited_repo, current_phase=phase)
 
     is_user_doc = ask_confirmation("¿Este elemento debe incluirse en el Manual de Usuario u Onboarding?")
     guardrails = input("AI Guardrails / Instrucciones inmutables para la IA (opcional): ").strip() or None
@@ -197,7 +233,7 @@ def menu_create_item(pm: ProjectManager) -> None:
     print(f"  • ID: {item_id}")
     print(f"  • Fase: {phase.value.upper()}")
     print(f"  • Título: {title}")
-    print(f"  • Padres: {parent_ids}")
+    print(f"  • Padres: {parent_ids if parent_ids else 'Ninguno'}")
     print(f"  • Doc Usuario: {is_user_doc}")
     print(f"  • Guardrails: {guardrails if guardrails else 'Ninguno'}")
 
@@ -243,13 +279,13 @@ def menu_compile_project(pm: ProjectManager) -> None:
 
     errors = compiler.validate_graph()
     if errors:
-        print("❌ Se han detectado errores en la trazabilidad ESA del proyecto:")
+        print("❌ Se han detectado errores en la trazabilidad ESA/MOM del proyecto:")
         for err in errors:
             print(f"  • {err}")
         print("🛑 Compilación abortada por fallos de trazabilidad.")
         return
 
-    print("✅ Grafo ESA 100% válido y verificado.")
+    print("✅ Grafo ESA/MOM 100% válido y verificado.")
     if repo.target_docs_dir:
         print(f"📦 Se exportará automáticamente una copia a: {repo.target_docs_dir}")
     else:
@@ -270,7 +306,6 @@ def menu_review_agent_proposal(pm: ProjectManager) -> None:
         print("ℹ️ No hay propuestas pendientes de IA en 'data/ai-proposals/'.")
         return
 
-    # Agrupar propuestas por proyecto objetivo
     proposals_by_project: Dict[str, List[Path]] = {}
     for pf in proposal_files:
         try:
@@ -281,7 +316,6 @@ def menu_review_agent_proposal(pm: ProjectManager) -> None:
         except Exception:
             proposals_by_project.setdefault("Errores_Parsing", []).append(pf)
 
-    # Ordenar estrictamente por fecha de modificación/creación de archivo (mtime ascendente - FIFO)
     for proj in proposals_by_project:
         proposals_by_project[proj].sort(key=lambda p: p.stat().st_mtime)
 
@@ -345,7 +379,7 @@ def interactive_main() -> None:
         print("=======================================================")
         print("  [1] Listar proyectos y estado de la herencia")
         print("  [2] Crear un nuevo proyecto")
-        print("  [3] Configurar proyecto (Herencia y Ruta Target)")
+        print("  [3] Configurar proyecto (Visibilidad, Herencia y Ruta Target)")
         print("  [4] Crear / Editar especificación atómica (JSON)")
         print("  [5] Compilar proyecto (Generar doc. MD, Vault Obsidian y AGENTS.md)")
         print("  [6] Revisar y aprobar/rechazar propuestas de IA (data/ai-proposals/)")
@@ -362,12 +396,16 @@ def interactive_main() -> None:
                 chain = pm.get_inheritance_chain(p.name)
                 proj_json = p / "project.json"
                 target_str = ""
+                vis_str = "🌐 Público"
                 if proj_json.exists():
                     with open(proj_json, "r", encoding="utf-8") as f:
-                        t_raw = json.load(f).get("target_docs_dir", "").strip()
+                        data = json.load(f)
+                        if data.get("is_private", False):
+                            vis_str = "🔒 Privado"
+                        t_raw = data.get("target_docs_dir", "").strip()
                         if t_raw:
                             target_str = f" | Target Docs: {t_raw}"
-                print(f"  • {p.name} (Cadena DAG: {' -> '.join(chain)}{target_str})")
+                print(f"  • {p.name} [{vis_str}] (Cadena DAG: {' -> '.join(chain)}{target_str})")
         elif choice == "2":
             menu_create_project(pm)
         elif choice == "3":
@@ -419,4 +457,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Version: 0.2.8
+# Version: 0.4.0
