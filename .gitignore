@@ -208,3 +208,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ==========================================
+# REGLAS ESPECÍFICAS DEL PROYECTO MOM
+# ==========================================
+
+# Almacenamiento dinámico de proyectos (creado automáticamente en tiempo de ejecución)
+data/
+
+# Artefactos específicos de compilación nativa C/C++ (mom-c)
+mom-c/build/
+mom-c/bin/
+mom-c/mom-native
+
+# Dependencias y logs de JavaScript (mom-js)
+node_modules/
+.npm/
+
+# Configuración local e índices temporales de Obsidian
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/plugins/
+.obsidian/cache/
+
+# Version: 0.2.2
