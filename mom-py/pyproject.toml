@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "mom-core"
-version = "0.2.0"
-description = "MetsuOS Methodology (MOM) - Sistema multiproyecto de especificación atómica con herencia DAG y cero dependencias"
+name = "mom-py"
+version = "0.2.2"
+description = "MetsuOS Methodology (MOM) - Motor en Python sin dependencias externas"
 authors = ["Metsuke <metsuke@metsuos.org>"]
-readme = "README.md"
-packages = [{include = "mom"}]
+readme = "USER_MANUAL.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -13,9 +13,6 @@ python = "^3.11"
 pytest = "^8.0.0"
 mypy = "^1.8.0"
 ruff = "^0.2.0"
-
-[tool.poetry.scripts]
-mom = "mom.cli:main"
 
 [build-system]
 requires = ["poetry-core"]
@@ -28,3 +25,5 @@ line-length = 100
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+# Version: 0.2.2

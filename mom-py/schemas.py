@@ -96,3 +96,5 @@ class MOMItem:
             attributes=attr,
             metadata=meta
         )
+
+# Version: 0.2.0
