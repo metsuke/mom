@@ -2,21 +2,22 @@ import json
 import shutil
 from pathlib import Path
 from typing import List, Dict, Set, Optional
-from mom.schemas import MOMItem, ESAPhase
+from schemas import MOMItem, ESAPhase
 
 class ProjectManager:
     def __init__(self, data_dir: Optional[Path] = None) -> None:
         if data_dir is None:
-            # Ubica 'data/projects' dinámicamente en la raíz del repositorio MOM (sube 2 niveles desde mom-py)
             root_dir = Path(__file__).resolve().parent.parent
             self.data_dir = root_dir / "data" / "projects"
+            self.ai_proposals_dir = root_dir / "data" / "ai-proposals"
         else:
             self.data_dir = data_dir
+            self.ai_proposals_dir = data_dir.parent / "ai-proposals"
 
-        # Auto-inicialización: crea la carpeta de datos automáticamente si no existe
         self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.ai_proposals_dir.mkdir(parents=True, exist_ok=True)
 
-    def create_project(self, project_name: str, parent_projects: Optional[List[str]] = None) -> Path:
+    def create_project(self, project_name: str, parent_projects: Optional[List[str]] = None, target_docs_dir: Optional[str] = None) -> Path:
         proj_dir = self.data_dir / project_name
         if proj_dir.exists():
             raise FileExistsError(f"El proyecto '{project_name}' ya existe.")
@@ -30,7 +31,8 @@ class ProjectManager:
         meta = {
             "name": project_name,
             "version": "0.1.0",
-            "parent_projects": parent_projects or []
+            "parent_projects": parent_projects or [],
+            "target_docs_dir": target_docs_dir or ""
         }
         with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
@@ -67,6 +69,15 @@ class MOMInheritedRepository:
         self.project_name = project_name
         self.chain = pm.get_inheritance_chain(project_name)
         self.project_dir = pm.data_dir / project_name
+        
+        self.target_docs_dir: Optional[Path] = None
+        proj_json = self.project_dir / "project.json"
+        if proj_json.exists():
+            with open(proj_json, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                target_raw = data.get("target_docs_dir", "").strip()
+                if target_raw:
+                    self.target_docs_dir = Path(target_raw)
 
     def list_all_consolidated(self) -> Dict[str, MOMItem]:
         """Devuelve un mapa con los elementos acumulados, aplicando sobrescritura de especialización."""
@@ -85,4 +96,4 @@ class MOMInheritedRepository:
                             items[item.id] = item
         return items
 
-# Version: 0.2.2
+# Version: 0.2.7

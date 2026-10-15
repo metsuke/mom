@@ -12,7 +12,8 @@ class MOMCompiler:
         self.doc_out = self.project_dir / "doc"
         self.vault_out = self.project_dir / "vault"
         self.agents_out = self.project_dir / "AGENTS.md"
-        self.target_docs_dir = target_docs_dir
+        # Prioriza argumento directo, si no usa el configurado en project.json
+        self.target_docs_dir = target_docs_dir or repo.target_docs_dir
 
     def validate_graph(self) -> List[str]:
         """Valida la integridad del grafo ESA acumulado por herencia."""
@@ -68,7 +69,7 @@ declared_in: "{item.metadata.declared_in_project}"
                 f.write(file_content)
 
     def compile_all(self) -> None:
-        """Genera todos los entregables (doc/*.md, vault/, AGENTS.md) y despliega si hay carpeta target."""
+        """Genera todos los entregables (doc/*.md, vault/, AGENTS.md) y despliega si hay ruta target configurada."""
         self.doc_out.mkdir(parents=True, exist_ok=True)
         self.vault_out.mkdir(parents=True, exist_ok=True)
         all_items = self.repo.list_all_consolidated()
@@ -105,7 +106,7 @@ declared_in: "{item.metadata.declared_in_project}"
         with open(self.agents_out, "w", encoding="utf-8") as f:
             f.write(agents_content)
 
-        # 4. Despliegue en la carpeta target de destino
+        # 4. Despliegue en la carpeta target de destino (si está configurada)
         if self.target_docs_dir:
             self.target_docs_dir.mkdir(parents=True, exist_ok=True)
             for md_file in self.doc_out.glob("*.md"):
@@ -113,4 +114,4 @@ declared_in: "{item.metadata.declared_in_project}"
             if self.agents_out.exists():
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
-# Version: 0.2.2
+# Version: 0.2.6
