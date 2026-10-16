@@ -12,9 +12,8 @@ if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
 # Importaciones locales directas
-from projects import ProjectManager, MOMInheritedRepository
+from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from compiler import MOMCompiler
-from crud import MOMRepository
 from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, VerificationMethod, ItemAttributes, ItemMetadata
 
 def ask_confirmation(prompt: str, default: bool = False) -> bool:
@@ -67,7 +66,7 @@ def _curses_multi_select(stdscr, title_header: str, options: List[str], preselec
 
 def select_parent_projects_interactively(pm: ProjectManager, exclude_project: Optional[str] = None, preselected: Optional[List[str]] = None) -> List[str]:
     available = [
-        p.name for p in pm.data_dir.iterdir() 
+        p.name for p in pm.projects_root.iterdir() 
         if p.is_dir() and (p / "project.json").exists() and p.name != exclude_project
     ]
     if not available:
@@ -119,8 +118,8 @@ def menu_create_project(pm: ProjectManager) -> None:
 
     if ask_confirmation("¿Deseas crear el proyecto con estos datos?"):
         try:
-            proj_dir = pm.create_project(name, parent_projects=parents, target_docs_dir=target_docs, is_private=is_private)
-            print(f"✅ Proyecto '{name}' creado con éxito en: {proj_dir}")
+            repo = pm.create_project(name=name, parents=parents, target_docs_dir=target_docs if target_docs else None, is_private=is_private)
+            print(f"✅ Proyecto '{name}' creado con éxito en: {repo.project_dir}")
         except Exception as e:
             print(f"❌ Error al crear proyecto: {e}")
     else:
@@ -128,7 +127,7 @@ def menu_create_project(pm: ProjectManager) -> None:
 
 def menu_configure_project(pm: ProjectManager) -> None:
     print("\n--- ⚙️ CONFIGURAR PROYECTO (VISIBILIDAD, HERENCIA Y RUTA TARGET) ---")
-    projects = [p.name for p in pm.data_dir.iterdir() if p.is_dir() and (p / "project.json").exists()]
+    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
     if not projects:
         print("❌ No hay proyectos registrados.")
         return
@@ -144,11 +143,11 @@ def menu_configure_project(pm: ProjectManager) -> None:
         print("❌ Selección no válida.")
         return
 
-    proj_json = pm.data_dir / target_project / "project.json"
+    proj_json = pm.projects_root / target_project / "project.json"
     with open(proj_json, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
-    current_parents = meta.get("parent_projects", [])
+    current_parents = meta.get("parents", meta.get("parent_projects", []))
     current_target = meta.get("target_docs_dir", "")
     current_private = meta.get("is_private", False)
 
@@ -167,12 +166,14 @@ def menu_configure_project(pm: ProjectManager) -> None:
     if opt == "1":
         new_private = not current_private
         meta["is_private"] = new_private
-        pm.sync_gitignore_privacy(target_project, new_private)
+        repo = MOMInheritedRepository(pm.projects_root, target_project)
+        repo.config.is_private = new_private
+        repo.sync_gitignore()
         status_str = "🔒 PRIVADO (regla añadida a .gitignore)" if new_private else "🌐 PÚBLICO (regla eliminada de .gitignore)"
         print(f"ℹ️ Visibilidad ajustada a: {status_str}")
     elif opt == "2":
         new_parents = select_parent_projects_interactively(pm, exclude_project=target_project, preselected=current_parents)
-        meta["parent_projects"] = new_parents
+        meta["parents"] = new_parents
     elif opt == "3":
         new_target = input("Introduce la nueva ruta target (o pulsa Enter para limpiar/desactivar): ").strip()
         meta["target_docs_dir"] = new_target
@@ -182,12 +183,12 @@ def menu_configure_project(pm: ProjectManager) -> None:
 
     if ask_confirmation("¿Guardar los cambios de configuración en project.json?"):
         with open(proj_json, "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2)
+            json.dump(meta, f, indent=2, ensure_ascii=False)
         print("✅ Configuración del proyecto actualizada.")
 
 def menu_create_item(pm: ProjectManager) -> None:
     print("\n--- 📝 CREAR / EDITAR ESPECIFICACIÓN ATÓMICA (JSON) ---")
-    projects = [p.name for p in pm.data_dir.iterdir() if p.is_dir() and (p / "project.json").exists()]
+    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
     if not projects:
         print("❌ No hay proyectos creados. Crea un proyecto primero.")
         return
@@ -203,8 +204,7 @@ def menu_create_item(pm: ProjectManager) -> None:
         print("❌ Selección no válida.")
         return
 
-    inherited_repo = MOMInheritedRepository(pm, target_project)
-    repo = MOMRepository(pm.data_dir / target_project)
+    inherited_repo = MOMInheritedRepository(pm.projects_root, target_project)
 
     print("\nFases ESA/MOM disponibles: [0] COR  [1] URD  [2] SRD  [3] ADD  [4] DDD")
     phase_map = {"0": ESAPhase.COR, "1": ESAPhase.URD, "2": ESAPhase.SRD, "3": ESAPhase.ADD, "4": ESAPhase.DDD}
@@ -248,8 +248,8 @@ def menu_create_item(pm: ProjectManager) -> None:
                 attributes=ItemAttributes(priority=PriorityEnum.HIGH, is_user_doc=is_user_doc),
                 metadata=ItemMetadata(author="Metsuke", declared_in_project=target_project, ai_guardrails=guardrails)
             )
-            repo.create_item(item)
-            print(f"✅ Ítem '{item_id}' guardado correctamente en {target_project}.")
+            saved_path = inherited_repo.save_item(item)
+            print(f"✅ Ítem '{item_id}' guardado correctamente en {saved_path}.")
         except Exception as e:
             print(f"❌ Error al guardar el ítem: {e}")
     else:
@@ -257,7 +257,7 @@ def menu_create_item(pm: ProjectManager) -> None:
 
 def menu_compile_project(pm: ProjectManager) -> None:
     print("\n--- ⚙️ COMPILACIÓN DE DOCUMENTACIÓN ---")
-    projects = [p.name for p in pm.data_dir.iterdir() if p.is_dir() and (p / "project.json").exists()]
+    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
     if not projects:
         print("❌ No hay proyectos para compilar.")
         return
@@ -274,7 +274,7 @@ def menu_compile_project(pm: ProjectManager) -> None:
         return
 
     print(f"\nCompilando proyecto '{target_project}' y resolviendo árbol de herencia DAG...")
-    repo = MOMInheritedRepository(pm, target_project)
+    repo = MOMInheritedRepository(pm.projects_root, target_project)
     compiler = MOMCompiler(repo)
 
     errors = compiler.validate_graph()
@@ -299,7 +299,11 @@ def menu_compile_project(pm: ProjectManager) -> None:
 
 def menu_review_agent_proposal(pm: ProjectManager) -> None:
     print("\n--- 🤖 REVISIÓN Y APROBACIÓN DE PROPUESTAS PENDIENTES DE IA ---")
-    proposals_dir = pm.ai_proposals_dir
+    proposals_dir = pm.projects_root.parent / "ai-proposals"
+    if not proposals_dir.exists():
+        print("ℹ️ No hay propuestas pendientes de IA en 'data/ai-proposals/'.")
+        return
+
     proposal_files = list(proposals_dir.glob("*.json"))
 
     if not proposal_files:
@@ -357,9 +361,10 @@ def menu_review_agent_proposal(pm: ProjectManager) -> None:
         print("-------------------------------------------------------")
 
         if ask_confirmation("¿APROBAR e integrar esta propuesta en el proyecto?"):
-            repo = MOMRepository(pm.data_dir / target_proj)
             try:
-                repo.update_item(item) if repo.read_item(item.id) else repo.create_item(item)
+                repo = MOMInheritedRepository(pm.projects_root, target_proj)
+                item.attributes.status = StatusEnum.APPROVED
+                repo.save_item(item)
                 pf.unlink()
                 print(f"✅ Propuesta '{item.id}' APROBADA e integrada. Archivo de propuesta eliminado.")
             except Exception as e:
@@ -372,7 +377,8 @@ def menu_review_agent_proposal(pm: ProjectManager) -> None:
                 print("⏸️ Propuesta mantenida en 'data/ai-proposals/' para revisión posterior.")
 
 def interactive_main() -> None:
-    pm = ProjectManager()
+    projects_dir = current_dir.parent / "data" / "projects"
+    pm = ProjectManager(projects_root=projects_dir)
     while True:
         print("\n=======================================================")
         print("     MOM (MetsuOS Methodology) - MENÚ PRINCIPAL       ")
@@ -389,11 +395,12 @@ def interactive_main() -> None:
 
         if choice == "1":
             print("\n📋 Proyectos registrados:")
-            projs = [p for p in pm.data_dir.iterdir() if p.is_dir() and (p / "project.json").exists()]
+            projs = [p for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
             if not projs:
                 print("  (Aún no hay proyectos registrados. Crea uno con la opción [2])")
             for p in projs:
-                chain = pm.get_inheritance_chain(p.name)
+                repo = MOMInheritedRepository(pm.projects_root, p.name)
+                chain = repo.chain
                 proj_json = p / "project.json"
                 target_str = ""
                 vis_str = "🌐 Público"
@@ -423,6 +430,7 @@ def interactive_main() -> None:
             print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 6.")
 
 def main() -> None:
+    projects_dir = current_dir.parent / "data" / "projects"
     if len(sys.argv) > 1:
         parser = argparse.ArgumentParser(description="MOM Standalone CLI")
         subparsers = parser.add_subparsers(dest="command")
@@ -435,18 +443,18 @@ def main() -> None:
         compile_parser.add_argument("--project", required=True)
 
         args = parser.parse_args()
-        pm = ProjectManager()
+        pm = ProjectManager(projects_root=projects_dir)
         if args.command == "projects":
             if args.action == "list":
-                for p in pm.data_dir.iterdir():
+                for p in pm.projects_root.iterdir():
                     if p.is_dir() and (p / "project.json").exists():
                         print(f"  - {p.name}")
             elif args.action == "create":
                 parents = [p.strip() for p in args.parents.split(",")] if args.parents else []
-                pm.create_project(args.name, parent_projects=parents)
+                pm.create_project(name=args.name, parents=parents)
                 print(f"✅ Proyecto '{args.name}' creado.")
         elif args.command == "compile":
-            repo = MOMInheritedRepository(pm, args.project)
+            repo = MOMInheritedRepository(pm.projects_root, args.project)
             compiler = MOMCompiler(repo)
             if not compiler.validate_graph():
                 compiler.compile_all()
@@ -457,4 +465,4 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Version: 0.4.0
+# Version: 0.5.2
