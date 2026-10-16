@@ -2,7 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Dict, List, Optional
 from projects import MOMInheritedRepository
-from schemas import ESAPhase, MOMItem, MetsuOSKnowledgeLevel
+from schemas import ESAPhase, MOMItem, MetsuOSKnowledgeLevel, CURRENT_SCHEMA_VERSION
 
 class MOMCompiler:
     """Compilador de especificaciones atómicas y generador de entregables con plantillas agnósticas (incluyendo COR y VISION) y Obsidian Vault."""
@@ -43,8 +43,9 @@ class MOMCompiler:
                     errors.append(f"[{item.id}] (de '{item.metadata.declared_in_project}') apunta a parent_id inexistente: '{pid}'")
 
             # COR y URD pueden no tener padres (son raíces del grafo). Fases posteriores exigen herencia.
-            if item.phase not in (ESAPhase.COR, ESAPhase.URD) and not item.parent_ids:
-                errors.append(f"[{item.id}] El elemento de fase '{item.phase.value}' no tiene padres (debe heredar de URD, COR o fases previas).")
+            phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
+            if phase_val not in ("cor", "urd") and not item.parent_ids:
+                errors.append(f"[{item.id}] El elemento de fase '{phase_val.upper()}' no tiene padres (debe heredar de URD, COR o fases previas).")
 
         return errors
 
@@ -61,7 +62,8 @@ class MOMCompiler:
         # Renderización de nivel de conocimiento MetsuOS
         kl_str = ""
         if attr.metsuos_knowledge_level:
-            kl_str = f" | **Nivel MetsuOS:** `{attr.metsuos_knowledge_level.value}`"
+            kl_val = attr.metsuos_knowledge_level.value if hasattr(attr.metsuos_knowledge_level, 'value') else str(attr.metsuos_knowledge_level)
+            kl_str = f" | **Nivel MetsuOS:** `{kl_val}`"
 
         # Renderización de evaluación OTAN
         nato_str = ""
@@ -81,8 +83,12 @@ class MOMCompiler:
 
         bib_block = "\n".join(bib_lines) + "\n\n" if bib_lines else ""
 
+        status_val = attr.status.value if hasattr(attr.status, 'value') else str(attr.status)
+        prio_val = attr.priority.value if hasattr(attr.priority, 'value') else str(attr.priority)
+        verif_val = attr.verification_method.value if hasattr(attr.verification_method, 'value') else str(attr.verification_method)
+
         block = f"### {item.id}: {item.title}\n" \
-                f"**Estado:** `{attr.status.value}` | **Prioridad:** `{attr.priority.value}` | **Verificación:** `{attr.verification_method.value}`{kl_str}{nato_str} | {origin}\n\n" \
+                f"**Estado:** `{status_val}` | **Prioridad:** `{prio_val}` | **Verificación:** `{verif_val}`{kl_str}{nato_str} | {origin}\n\n" \
                 f"#### Descripción\n{item.description}\n\n" \
                 f"{bib_block}" \
                 f"{parents}{children}{guardrail}\n---"
@@ -95,7 +101,8 @@ class MOMCompiler:
 
         # 1. Notas atómicas individuales por fase
         for item in all_items.values():
-            phase_dir = self.vault_out / item.phase.value.upper()
+            phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
+            phase_dir = self.vault_out / phase_val.upper()
             phase_dir.mkdir(parents=True, exist_ok=True)
 
             attr = item.attributes
@@ -106,7 +113,8 @@ class MOMCompiler:
             guardrail = f"\n> 🛑 **AI Guardrails (Inmutable):** {meta.ai_guardrails}" if meta.ai_guardrails else ""
 
             # Evaluación y Bibliografía para la nota atómica
-            kl_field = f'metsuos_knowledge_level: "{attr.metsuos_knowledge_level.value}"\n' if attr.metsuos_knowledge_level else ""
+            kl_val = attr.metsuos_knowledge_level.value if hasattr(attr.metsuos_knowledge_level, 'value') else str(attr.metsuos_knowledge_level) if attr.metsuos_knowledge_level else ""
+            kl_field = f'metsuos_knowledge_level: "{kl_val}"\n' if kl_val else ""
             nato_field = f'nato_eval: "{attr.nato_source_reliability or "?"}{attr.nato_information_credibility or "?"}"\n' if (attr.nato_source_reliability or attr.nato_information_credibility) else ""
 
             bib_info = ""
@@ -115,14 +123,18 @@ class MOMCompiler:
                 detail = f" - Detalle: {attr.bib_citation_detail}" if attr.bib_citation_detail else ""
                 bib_info = f"\n## Referencia Bibliográfica\n* **Fuente:** {attr.bib_title or 'Sin título'}{authors} (`{attr.bib_source or 'N/A'}`){detail}\n"
 
+            status_val = attr.status.value if hasattr(attr.status, 'value') else str(attr.status)
+            prio_val = attr.priority.value if hasattr(attr.priority, 'value') else str(attr.priority)
+
             file_content = f"""---
 id: "{item.id}"
-phase: "{item.phase.value}"
+phase: "{phase_val}"
 title: "{item.title}"
-status: "{attr.status.value}"
-priority: "{attr.priority.value}"
+status: "{status_val}"
+priority: "{prio_val}"
 author: "{meta.author}"
 declared_in: "{meta.declared_in_project}"
+schema_version: "{item.schema_version}"
 {kl_field}{nato_field}---
 
 # {item.id}: {item.title}
@@ -175,7 +187,11 @@ declared_in: "{meta.declared_in_project}"
 
         # 2. Compilación de documentos consolidados por fase ESA/MOM
         for phase in ESAPhase:
-            phase_items = [i for i in all_items.values() if i.phase == phase]
+            phase_items = [
+                i for i in all_items.values() 
+                if (isinstance(i.phase, str) and i.phase.lower() == phase.value.lower()) or 
+                (hasattr(i.phase, 'value') and i.phase.value.lower() == phase.value.lower())
+            ]
             phase_items.sort(key=lambda x: x.id)
 
             blocks = [self._build_item_markdown_block(item) for item in phase_items]
@@ -188,15 +204,17 @@ declared_in: "{meta.declared_in_project}"
             with open(self.doc_out / f"{phase.value.upper()}.md", "w", encoding="utf-8") as f:
                 f.write(doc_content)
 
-        # 3. Compilación del Vault para Obsidian
-        self.compile_obsidian_vault()
-
-        # 4. Compilación de AGENTS.md acumulado
-        guardrail_items = [i for i in all_items.values() if i.metadata.ai_guardrails]
+        # 3. Compilación de AGENTS.md acumulado (antes de volcar al Vault)
+        guardrail_items = [i for i in all_items.values() if i.metadata and i.metadata.ai_guardrails]
         blocks = [f"### Componente `{i.id}` ({i.title}) - Origen: `{i.metadata.declared_in_project}`\n> 🛑 **Guardrail Inmutable:** {i.metadata.ai_guardrails}\n" for i in guardrail_items]
-        agents_content = "# AGENTS.md - Contexto de Onboarding e Instrucciones para IA\n\n" + "\n".join(blocks)
+        agents_content = f"# AGENTS.md - Contexto de Onboarding e Instrucciones para IA\n**Proyecto:** {self.repo.project_name} | **Esquema:** v{CURRENT_SCHEMA_VERSION}\n\n"
+        agents_content += "\n".join(blocks) if blocks else "*(No se han definido guardrails inmutables en las especificaciones actuales)*"
+        
         with open(self.agents_out, "w", encoding="utf-8") as f:
             f.write(agents_content)
+
+        # 4. Compilación del Vault para Obsidian
+        self.compile_obsidian_vault()
 
         # 5. Despliegue en la carpeta target configurada
         if self.target_docs_dir:
@@ -206,4 +224,4 @@ declared_in: "{meta.declared_in_project}"
             if self.agents_out.exists():
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
-# Version: 0.5.0
+# Version: 0.5.2

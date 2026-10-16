@@ -1,6 +1,8 @@
 {
+  "schema_version": "0.5.2",
   "name": "MOM",
-  "version": "0.1.0",
-  "parent_projects": [],
+  "parents": [],
+  "is_private": true,
+  "mandatory": true,
   "target_docs_dir": "/Users/Metsuke/mom/doc"
 }

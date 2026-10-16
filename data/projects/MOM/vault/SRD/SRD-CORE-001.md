@@ -6,6 +6,7 @@ status: "DRAFT"
 priority: "HIGH"
 author: "Metsuke"
 declared_in: "MOM"
+schema_version: "0.5.2"
 ---
 
 # SRD-CORE-001: Persistencia JSON Atómica y Trazabilidad por Grafo Directed Acyclic Graph
