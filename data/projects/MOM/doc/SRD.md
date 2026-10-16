@@ -32,13 +32,4 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 ---
 
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS SOFTWARE
-### SRD-CORE-001: Persistencia JSON Atómica y Trazabilidad por Grafo Directed Acyclic Graph
-**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Origen:** `MOM`
-
-
-#### Descripción
-El motor debe almacenar cada ítem en src//.json y verificar que todo ítem de fase SRD, ADD o DDD tenga asignado obligatoriamente al menos un parent_id existente en el grafo.
-
-**Padres:** [[URD-CORE-001]]
-
----
+*(No hay especificaciones atómicas registradas en esta fase)*
