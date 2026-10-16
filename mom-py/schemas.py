@@ -3,6 +3,8 @@ import re
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
+CURRENT_SCHEMA_VERSION = "0.5.2"
+
 class ESAPhase(str, Enum):
     COR = "cor"  # Phase 0: Corpus de Filosofía, Axiomas y Estándares
     URD = "urd"  # Phase 1: User Requirements Document
@@ -45,7 +47,6 @@ class MetsuOSKnowledgeLevel(str, Enum):
         
         normalized = str(raw_value).strip().upper()
         
-        # Mapeo directo por clave de enumeración interna
         mapping = {
             "DARK1": cls.DARK1,
             "ROJO2": cls.ROJO2,
@@ -59,7 +60,6 @@ class MetsuOSKnowledgeLevel(str, Enum):
         if normalized in mapping:
             return mapping[normalized]
             
-        # Comprobación de coincidencia por el valor completo
         for item in cls:
             if item.value.upper() == normalized or normalized in item.value.upper():
                 return item
@@ -74,15 +74,13 @@ class ItemAttributes:
         verification_method: VerificationMethod = VerificationMethod.TEST,
         is_user_doc: bool = False,
         tags: Optional[List[str]] = None,
-        # Campos bibliográficos globales opcionales
         bib_authors: Optional[List[str]] = None,
         bib_title: Optional[str] = None,
         bib_source: Optional[str] = None,
         bib_citation_detail: Optional[str] = None,
-        # Evaluación de fuentes y conocimiento (MetsuOS + OTAN)
         metsuos_knowledge_level: Optional[MetsuOSKnowledgeLevel] = None,
-        nato_source_reliability: Optional[str] = None,  # A..F
-        nato_information_credibility: Optional[str] = None  # 1..6
+        nato_source_reliability: Optional[str] = None,
+        nato_information_credibility: Optional[str] = None
     ) -> None:
         self.status = status
         self.priority = priority
@@ -114,7 +112,6 @@ class ItemAttributes:
         if self.bib_citation_detail:
             data["bib_citation_detail"] = self.bib_citation_detail
         if self.metsuos_knowledge_level:
-            # Renderizado directo con el icono pegado al número
             data["metsuos_knowledge_level"] = self.metsuos_knowledge_level.value
         if self.nato_source_reliability:
             data["nato_source_reliability"] = self.nato_source_reliability
@@ -193,8 +190,10 @@ class MOMItem:
         parent_ids: Optional[List[str]] = None,
         child_ids: Optional[List[str]] = None,
         attributes: Optional[ItemAttributes] = None,
-        metadata: Optional[ItemMetadata] = None
+        metadata: Optional[ItemMetadata] = None,
+        schema_version: str = CURRENT_SCHEMA_VERSION
     ) -> None:
+        self.schema_version = schema_version
         self.id = id
         self.phase = phase
         self.title = title
@@ -206,8 +205,9 @@ class MOMItem:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "schema_version": self.schema_version,
             "id": self.id,
-            "phase": self.phase.value,
+            "phase": self.phase.value if hasattr(self.phase, "value") else str(self.phase),
             "title": self.title,
             "description": self.description,
             "parent_ids": self.parent_ids,
@@ -217,8 +217,27 @@ class MOMItem:
         }
 
     @classmethod
+    def _migrate_raw_data(cls, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Asegura la migración automática y transparente de datos antiguos sin pérdida de campos."""
+        migrated = dict(data)
+        
+        # 1. Normalizar la fase
+        raw_phase = str(migrated.get("phase", "urd")).lower()
+        phase_map = {p.value: p.value for p in ESAPhase}
+        migrated["phase"] = phase_map.get(raw_phase, "urd")
+
+        # 2. Migrar versión del esquema
+        migrated["schema_version"] = CURRENT_SCHEMA_VERSION
+        return migrated
+
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MOMItem":
+        # Ejecuta automigración si no coincide con la versión actual
+        if data.get("schema_version") != CURRENT_SCHEMA_VERSION:
+            data = cls._migrate_raw_data(data)
+
         return cls(
+            schema_version=data["schema_version"],
             id=data["id"],
             phase=ESAPhase(data["phase"]),
             title=data["title"],

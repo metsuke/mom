@@ -1,4 +1,5 @@
 {
+  "schema_version": "0.5.2",
   "id": "URD-CORE-001",
   "phase": "urd",
   "title": "Motor de Especificación Atómica y Trazabilidad ESA PSS-05",
@@ -8,17 +9,17 @@
     "SRD-CORE-001"
   ],
   "attributes": {
+    "status": "DRAFT",
     "priority": "HIGH",
     "verification_method": "UNIT_TEST",
-    "status": "DRAFT",
     "is_user_doc": true,
-    "extra": {}
+    "tags": []
   },
   "metadata": {
     "author": "Metsuke",
     "declared_in_project": "MOM",
     "ai_guardrails": "NINGÚN agente de IA puede modificar la estructura de carpetas data/ ni omitir las validaciones de trazabilidad ESA sin confirmación explícita del usuario humano.",
-    "created_at": null,
-    "updated_at": null
+    "created_at": "2026-10-16T18:41:46.263419+00:00",
+    "updated_at": "2026-10-16T18:41:46.263419+00:00"
   }
 }

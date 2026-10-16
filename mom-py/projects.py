@@ -2,7 +2,7 @@ import json
 import shutil
 from pathlib import Path
 from typing import List, Dict, Optional, Set, Any
-from schemas import MOMItem, format_item_id
+from schemas import MOMItem, format_item_id, CURRENT_SCHEMA_VERSION
 
 class MOMProjectConfig:
     """Configuración del proyecto y sus relaciones de herencia DAG."""
@@ -10,18 +10,21 @@ class MOMProjectConfig:
         self,
         name: str,
         parents: Optional[List[str]] = None,
-        is_private: bool = False,
+        is_private: bool = True,
         target_docs_dir: Optional[str] = None,
-        mandatory: bool = True
+        mandatory: bool = True,
+        schema_version: str = CURRENT_SCHEMA_VERSION
     ) -> None:
         self.name = name
         self.parents = parents or []
         self.is_private = is_private
         self.target_docs_dir = target_docs_dir
         self.mandatory = mandatory
+        self.schema_version = schema_version
 
     def to_dict(self) -> Dict[str, Any]:
         data = {
+            "schema_version": self.schema_version,
             "name": self.name,
             "parents": self.parents,
             "is_private": self.is_private,
@@ -33,16 +36,18 @@ class MOMProjectConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MOMProjectConfig":
+        # Interpretación de valores por defecto si no existen en esquemas antiguos: Privado (True) y Obligatorio/Mandatory (True)
         return cls(
-            name=data["name"],
-            parents=data.get("parents", []),
-            is_private=data.get("is_private", False),
+            name=data.get("name", "Un-named"),
+            parents=data.get("parents", data.get("parent_projects", [])),
+            is_private=data.get("is_private", True),
             target_docs_dir=data.get("target_docs_dir"),
-            mandatory=data.get("mandatory", True)
+            mandatory=data.get("mandatory", True),
+            schema_version=data.get("schema_version", CURRENT_SCHEMA_VERSION)
         )
 
 class MOMInheritedRepository:
-    """Maneja la carga, resolución DAG de herencia y filtrado mandatorio/referencial de proyectos MOM."""
+    """Maneja la carga, resolución DAG de herencia, filtrado mandatorio y automigración de esquema."""
     def __init__(self, projects_root: Path, target_project_name: str) -> None:
         self.projects_root = projects_root
         self.project_name = target_project_name
@@ -57,10 +62,21 @@ class MOMInheritedRepository:
     def _load_config(self, project_path: Path) -> MOMProjectConfig:
         config_file = project_path / "project.json"
         if not config_file.exists():
-            # Configuración por defecto si no existe project.json
-            return MOMProjectConfig(name=project_path.name)
+            config = MOMProjectConfig(name=project_path.name, is_private=True, mandatory=True)
+            self._save_config(project_path, config)
+            return config
+
         with open(config_file, "r", encoding="utf-8") as f:
-            return MOMProjectConfig.from_dict(json.load(f))
+            raw_data = json.load(f)
+
+        config = MOMProjectConfig.from_dict(raw_data)
+
+        # Si el project.json no tenía schema_version, is_private o mandatory, lo migramos y guardamos en disco
+        if raw_data.get("schema_version") != CURRENT_SCHEMA_VERSION or "is_private" not in raw_data or "mandatory" not in raw_data:
+            config.schema_version = CURRENT_SCHEMA_VERSION
+            self._save_config(project_path, config)
+
+        return config
 
     def _save_config(self, project_path: Path, config: MOMProjectConfig) -> None:
         config_file = project_path / "project.json"
@@ -68,7 +84,7 @@ class MOMInheritedRepository:
             json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
 
     def _resolve_inheritance_chain(self, start_project: str) -> List[str]:
-        """Resuelve el orden topológico de herencia (DAG) desde los ancestros raíz hasta el proyecto hijo."""
+        """Resuelve el orden topológico de herencia (DAG)."""
         visited: Set[str] = set()
         chain: List[str] = []
 
@@ -92,32 +108,42 @@ class MOMInheritedRepository:
             return Path(self.config.target_docs_dir)
         return None
 
-    def list_local_items(self) -> List[MOMItem]:
-        """Lista los ítems declarados exclusivamente en el proyecto objetivo actual."""
-        items: List[MOMItem] = []
-        specs_dir = self.project_dir / "specs"
-        if not specs_dir.exists():
-            return items
+    def _load_and_migrate_item(self, json_file: Path) -> Optional[MOMItem]:
+        """Carga una especificación, la migra si es de un esquema antiguo y actualiza el fichero en disco."""
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
 
-        for json_file in specs_dir.glob("*.json"):
-            try:
-                with open(json_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    item = MOMItem.from_dict(data)
-                    items.append(item)
-            except Exception as e:
-                print(f"⚠️ Error cargando especificación '{json_file.name}': {e}")
+            item = MOMItem.from_dict(raw_data)
+
+            # Si el fichero no tenía la versión actual del esquema, se reescribe actualizado
+            if raw_data.get("schema_version") != CURRENT_SCHEMA_VERSION:
+                with open(json_file, "w", encoding="utf-8") as f:
+                    json.dump(item.to_dict(), f, indent=2, ensure_ascii=False)
+
+            return item
+        except Exception as e:
+            print(f"⚠️ Error cargando/migrando especificación '{json_file.name}': {e}")
+            return None
+
+    def list_local_items(self) -> List[MOMItem]:
+        """Lista los ítems declarados exclusivamente en el proyecto objetivo actual con automigración."""
+        items: List[MOMItem] = []
+        
+        # Buscar en todo el subárbol del proyecto excluyendo project.json, doc y vault
+        for json_file in self.project_dir.rglob("*.json"):
+            if json_file.name == "project.json" or "doc/" in str(json_file) or "vault/" in str(json_file):
+                continue
+            item = self._load_and_migrate_item(json_file)
+            if item:
+                items.append(item)
         return items
 
     def list_all_consolidated(self) -> Dict[str, MOMItem]:
         """
-        Acumula y consolida todas las especificaciones a lo largo de la cadena DAG de herencia.
-        Respeta la regla global 'mandatory':
-          - mandatory = True: El proyecto aporta la totalidad de sus especificaciones.
-          - mandatory = False: El proyecto sólo aporta las especificaciones citadas explícitamente 
-            como 'parent_ids' por algún proyecto hijo.
+        Consolida todas las especificaciones a lo largo de la cadena DAG.
+        Garantiza que las URD y COR (nodos raíz) se mantengan incluso con mandatory=False.
         """
-        # Cargar todas las especificaciones por proyecto en la cadena
         project_items_map: Dict[str, Dict[str, MOMItem]] = {}
         project_configs: Dict[str, MOMProjectConfig] = {}
 
@@ -130,47 +156,43 @@ class MOMInheritedRepository:
             project_configs[proj_name] = cfg
             items_dict: Dict[str, MOMItem] = {}
 
-            specs_dir = p_dir / "specs"
-            if specs_dir.exists():
-                for json_file in specs_dir.glob("*.json"):
-                    try:
-                        with open(json_file, "r", encoding="utf-8") as f:
-                            item = MOMItem.from_dict(json.load(f))
-                            # Registrar origen si no está marcado
-                            if not item.metadata.declared_in_project:
-                                item.metadata.declared_in_project = proj_name
-                            items_dict[item.id] = item
-                    except Exception as e:
-                        print(f"⚠️ Error en '{json_file.name}' de '{proj_name}': {e}")
+            # Carga recursiva de cualquier especificación dentro del proyecto
+            for json_file in p_dir.rglob("*.json"):
+                if json_file.name == "project.json" or "doc/" in str(json_file) or "vault/" in str(json_file):
+                    continue
+
+                item = self._load_and_migrate_item(json_file)
+                if item:
+                    if not item.metadata.declared_in_project:
+                        item.metadata.declared_in_project = proj_name
+                    items_dict[item.id] = item
 
             project_items_map[proj_name] = items_dict
 
-        # El proyecto objetivo (el último en la cadena) siempre se consolida completo
+        # El proyecto actual siempre se incluye 100% completo
         consolidated: Dict[str, MOMItem] = dict(project_items_map.get(self.project_name, {}))
 
-        # Iterar hacia atrás desde los ancestros
-        # Para proyectos con mandatory=False, recopilaremos sólo los IDs necesitados por los hijos
+        # Iterar ancestros respetando 'mandatory' pero preservando URD y COR (nodos raíz primarios)
         for proj_name in reversed(self.chain[:-1]):
-            cfg = project_configs.get(proj_name, MOMProjectConfig(name=proj_name))
+            cfg = project_configs.get(proj_name, MOMProjectConfig(name=proj_name, is_private=True, mandatory=True))
             ancestor_items = project_items_map.get(proj_name, {})
 
             if cfg.mandatory:
-                # Herencia mandatoria: Se importan todos los ítems del ancestro
                 for item_id, item in ancestor_items.items():
                     if item_id not in consolidated:
                         consolidated[item_id] = item
             else:
-                # Herencia no mandatoria (condicional por referencia/bibliografía):
-                # Se buscan los parent_ids citados activamente por los ítems ya consolidados
                 referenced_ids: Set[str] = set()
                 for active_item in list(consolidated.values()):
                     for pid in active_item.parent_ids:
                         referenced_ids.add(pid)
 
-                # Importar sólo los ítems referenciados
-                for ref_id in referenced_ids:
-                    if ref_id in ancestor_items and ref_id not in consolidated:
-                        consolidated[ref_id] = ancestor_items[ref_id]
+                for item_id, ancestor_item in ancestor_items.items():
+                    phase_str = ancestor_item.phase.value if hasattr(ancestor_item.phase, 'value') else str(ancestor_item.phase)
+                    if item_id not in consolidated:
+                        # Preserva el ítem si está referenciado O si pertenece a URD/COR (raíces)
+                        if item_id in referenced_ids or phase_str.lower() in ("urd", "cor"):
+                            consolidated[item_id] = ancestor_item
 
         return consolidated
 
@@ -189,17 +211,15 @@ class MOMInheritedRepository:
         return file_path
 
     def sync_gitignore(self) -> None:
-        """Sincroniza dinámicamente las entradas del archivo .gitignore de la raíz del repositorio según visibilidad."""
+        """Sincroniza las entradas del archivo .gitignore de la raíz según visibilidad."""
         repo_root = self.projects_root.parent
         gitignore_path = repo_root / ".gitignore"
 
-        # Leer entradas existentes
         lines: List[str] = []
         if gitignore_path.exists():
             with open(gitignore_path, "r", encoding="utf-8") as f:
                 lines = [line.strip() for line in f.readlines()]
 
-        # Buscar todos los proyectos privados
         private_projects: List[str] = []
         for p_dir in self.projects_root.iterdir():
             if p_dir.is_dir():
@@ -207,7 +227,6 @@ class MOMInheritedRepository:
                 if cfg.is_private:
                     private_projects.append(f"data/projects/{p_dir.name}/")
 
-        # Reconstruir o actualizar la sección bloqueada de MOM Privacy Sync
         new_lines: List[str] = []
         in_mom_section = False
 
@@ -221,7 +240,6 @@ class MOMInheritedRepository:
             if not in_mom_section:
                 new_lines.append(line)
 
-        # Añadir bloque actualizado
         new_lines.append("# BEGIN MOM PRIVACY SYNC")
         for priv_entry in sorted(private_projects):
             new_lines.append(priv_entry)
@@ -231,7 +249,7 @@ class MOMInheritedRepository:
             f.write("\n".join(new_lines) + "\n")
 
 class MOMProjectManager:
-    """Gestor global para la creación, enumeración y administración de proyectos en data/projects/."""
+    """Gestor global para la administración de proyectos en data/projects/."""
     def __init__(self, projects_root: Path) -> None:
         self.projects_root = projects_root
         self.projects_root.mkdir(parents=True, exist_ok=True)
@@ -245,14 +263,14 @@ class MOMProjectManager:
                     with open(config_file, "r", encoding="utf-8") as f:
                         configs.append(MOMProjectConfig.from_dict(json.load(f)))
                 else:
-                    configs.append(MOMProjectConfig(name=p_dir.name))
+                    configs.append(MOMProjectConfig(name=p_dir.name, is_private=True, mandatory=True))
         return sorted(configs, key=lambda x: x.name)
 
     def create_project(
         self,
         name: str,
         parents: Optional[List[str]] = None,
-        is_private: bool = False,
+        is_private: bool = True,
         target_docs_dir: Optional[str] = None,
         mandatory: bool = True
     ) -> MOMInheritedRepository:
@@ -280,4 +298,4 @@ class MOMProjectManager:
         repo.sync_gitignore()
         return repo
 
-# Version: 0.5.0
+# Version: 0.5.2

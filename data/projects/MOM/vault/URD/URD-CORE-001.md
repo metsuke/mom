@@ -6,6 +6,7 @@ status: "DRAFT"
 priority: "HIGH"
 author: "Metsuke"
 declared_in: "MOM"
+schema_version: "0.5.2"
 ---
 
 # URD-CORE-001: Motor de Especificación Atómica y Trazabilidad ESA PSS-05

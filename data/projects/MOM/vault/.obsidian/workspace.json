@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "INDEX.md",
+                "file": "AGENTS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "INDEX"
+              "title": "AGENTS"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "INDEX.md",
+                "file": "AGENTS.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "INDEX.md",
+                "file": "AGENTS.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "INDEX.md",
+                "file": "AGENTS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,16 +190,16 @@
   },
   "active": "a46dfc51006f2da5",
   "lastOpenFiles": [
-    "AGENTS.md",
-    "URD/URD-CORE-001.md",
     "SRD.md",
-    "INDEX.md",
-    "DDD.md",
-    "COR.md",
-    "ADD.md",
-    "VISION.md",
-    "SRD/SRD-CORE-001.md",
     "URD.md",
+    "VISION.md",
+    "AGENTS.md",
+    "ADD.md",
+    "URD/URD-CORE-001.md",
+    "SRD/SRD-CORE-001.md",
+    "COR.md",
+    "DDD.md",
+    "INDEX.md",
     "SRD"
   ]
 }

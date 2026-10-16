@@ -41,4 +41,15 @@ Condicionantes de entorno, normativas legales, interoperabilidad o presupuestari
 ---
 
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS DE USUARIO
-*(No hay especificaciones atómicas registradas en esta fase)*
+### URD-CORE-001: Motor de Especificación Atómica y Trazabilidad ESA PSS-05
+**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `UNIT_TEST` | **Origen:** `MOM`
+
+
+#### Descripción
+El sistema MOM debe permitir declarar especificaciones atómicas en formato JSON agrupadas por las fases URD, SRD, ADD y DDD del estándar ESA PSS-05, garantizando trazabilidad bidireccional y resolución de herencia DAG entre proyectos sin dependencias externas.
+
+**Hijos:** [[SRD-CORE-001]]
+
+> 🛑 **AI Guardrails (Inmutable):** NINGÚN agente de IA puede modificar la estructura de carpetas data/ ni omitir las validaciones de trazabilidad ESA sin confirmación explícita del usuario humano.
+
+---
