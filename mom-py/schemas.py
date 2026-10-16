@@ -1,4 +1,5 @@
 import datetime
+import re
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
@@ -28,6 +29,43 @@ class VerificationMethod(str, Enum):
     ANALYSIS = "ANALYSIS"
     DEMONSTRATION = "DEMONSTRATION"
 
+class MetsuOSKnowledgeLevel(str, Enum):
+    DARK1 = "⚫① Dark1 (Conocimiento en Bruto)"
+    ROJO2 = "🔴② Rojo2 (Conocimiento Impulsivo)"
+    YELLOW3 = "🟡③ Yellow3 (Conocimiento Crítico)"
+    GREEN4 = "🟢④ Green4 (Conocimiento Natural)"
+    BLUE5 = "🔵⑤ Blue5 (Conocimiento Científico)"
+    LIGHT6 = "⚪⑥ Light6 (Conocimiento Consolidado)"
+
+    @classmethod
+    def parse_flexible(cls, raw_value: str) -> Optional["MetsuOSKnowledgeLevel"]:
+        """Parsea cadenas flexibles (código, clave o representación formateada) de forma segura."""
+        if not raw_value:
+            return None
+        
+        normalized = str(raw_value).strip().upper()
+        
+        # Mapeo directo por clave de enumeración interna
+        mapping = {
+            "DARK1": cls.DARK1,
+            "ROJO2": cls.ROJO2,
+            "RED2": cls.ROJO2,
+            "YELLOW3": cls.YELLOW3,
+            "GREEN4": cls.GREEN4,
+            "BLUE5": cls.BLUE5,
+            "LIGHT6": cls.LIGHT6
+        }
+        
+        if normalized in mapping:
+            return mapping[normalized]
+            
+        # Comprobación de coincidencia por el valor completo
+        for item in cls:
+            if item.value.upper() == normalized or normalized in item.value.upper():
+                return item
+                
+        return None
+
 class ItemAttributes:
     def __init__(
         self,
@@ -35,39 +73,79 @@ class ItemAttributes:
         priority: PriorityEnum = PriorityEnum.MEDIUM,
         verification_method: VerificationMethod = VerificationMethod.TEST,
         is_user_doc: bool = False,
-        tags: Optional[List[str]] = None
+        tags: Optional[List[str]] = None,
+        # Campos bibliográficos globales opcionales
+        bib_authors: Optional[List[str]] = None,
+        bib_title: Optional[str] = None,
+        bib_source: Optional[str] = None,
+        bib_citation_detail: Optional[str] = None,
+        # Evaluación de fuentes y conocimiento (MetsuOS + OTAN)
+        metsuos_knowledge_level: Optional[MetsuOSKnowledgeLevel] = None,
+        nato_source_reliability: Optional[str] = None,  # A..F
+        nato_information_credibility: Optional[str] = None  # 1..6
     ) -> None:
         self.status = status
         self.priority = priority
         self.verification_method = verification_method
         self.is_user_doc = is_user_doc
         self.tags = tags or []
+        self.bib_authors = bib_authors or []
+        self.bib_title = bib_title
+        self.bib_source = bib_source
+        self.bib_citation_detail = bib_citation_detail
+        self.metsuos_knowledge_level = metsuos_knowledge_level
+        self.nato_source_reliability = nato_source_reliability
+        self.nato_information_credibility = nato_information_credibility
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        data = {
             "status": self.status.value,
             "priority": self.priority.value,
             "verification_method": self.verification_method.value,
             "is_user_doc": self.is_user_doc,
             "tags": self.tags
         }
+        if self.bib_authors:
+            data["bib_authors"] = self.bib_authors
+        if self.bib_title:
+            data["bib_title"] = self.bib_title
+        if self.bib_source:
+            data["bib_source"] = self.bib_source
+        if self.bib_citation_detail:
+            data["bib_citation_detail"] = self.bib_citation_detail
+        if self.metsuos_knowledge_level:
+            # Renderizado directo con el icono pegado al número
+            data["metsuos_knowledge_level"] = self.metsuos_knowledge_level.value
+        if self.nato_source_reliability:
+            data["nato_source_reliability"] = self.nato_source_reliability
+        if self.nato_information_credibility:
+            data["nato_information_credibility"] = self.nato_information_credibility
+        return data
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ItemAttributes":
         raw_method = data.get("verification_method", VerificationMethod.TEST.value)
-        
-        # Mapeo de seguridad para normalizar cadenas no contempladas originalmente
         try:
             verif_enum = VerificationMethod(raw_method)
         except ValueError:
             verif_enum = VerificationMethod.TEST
+
+        raw_kl = data.get("metsuos_knowledge_level")
+        kl_enum = MetsuOSKnowledgeLevel.parse_flexible(raw_kl) if raw_kl else None
 
         return cls(
             status=StatusEnum(data.get("status", StatusEnum.DRAFT.value)),
             priority=PriorityEnum(data.get("priority", PriorityEnum.MEDIUM.value)),
             verification_method=verif_enum,
             is_user_doc=data.get("is_user_doc", False),
-            tags=data.get("tags", [])
+            tags=data.get("tags", []),
+            bib_authors=data.get("bib_authors", []),
+            bib_title=data.get("bib_title"),
+            bib_source=data.get("bib_source"),
+            bib_citation_detail=data.get("bib_citation_detail"),
+            metsuos_knowledge_level=kl_enum,
+            nato_source_reliability=data.get("nato_source_reliability"),
+            nato_information_credibility=data.get("nato_information_credibility")
         )
 
 class ItemMetadata:
@@ -151,4 +229,9 @@ class MOMItem:
             metadata=ItemMetadata.from_dict(data.get("metadata", {}))
         )
 
-# Version: 0.4.1
+def format_item_id(project_prefix: str, phase_code: str, num: int, min_digits: int = 3) -> str:
+    """Genera IDs formateados dinámicamente ajustando el acolchado de ceros al número de dígitos real."""
+    digits = max(min_digits, len(str(num)))
+    return f"{project_prefix.upper()}-{phase_code.upper()}-{num:0{digits}d}"
+
+# Version: 0.5.2
