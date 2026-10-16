@@ -1,159 +1,283 @@
 import json
 import shutil
 from pathlib import Path
-from typing import List, Dict, Set, Optional
-from schemas import MOMItem, ESAPhase
+from typing import List, Dict, Optional, Set, Any
+from schemas import MOMItem, format_item_id
 
-class ProjectManager:
-    def __init__(self, data_dir: Optional[Path] = None) -> None:
-        if data_dir is None:
-            # Ubica 'data' dinámicamente en la raíz del repositorio MOM (sube 2 niveles desde mom-py)
-            self.root_dir = Path(__file__).resolve().parent.parent
-            self.data_dir = self.root_dir / "data" / "projects"
-            self.ai_proposals_dir = self.root_dir / "data" / "ai-proposals"
-            self.global_templates_dir = self.root_dir / "data" / "templates"
-        else:
-            self.root_dir = data_dir.parent.parent
-            self.data_dir = data_dir
-            self.ai_proposals_dir = data_dir.parent / "ai-proposals"
-            self.global_templates_dir = data_dir.parent / "templates"
+class MOMProjectConfig:
+    """Configuración del proyecto y sus relaciones de herencia DAG."""
+    def __init__(
+        self,
+        name: str,
+        parents: Optional[List[str]] = None,
+        is_private: bool = False,
+        target_docs_dir: Optional[str] = None,
+        mandatory: bool = True
+    ) -> None:
+        self.name = name
+        self.parents = parents or []
+        self.is_private = is_private
+        self.target_docs_dir = target_docs_dir
+        self.mandatory = mandatory
 
-        self.gitignore_path = self.root_dir / ".gitignore"
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.ai_proposals_dir.mkdir(parents=True, exist_ok=True)
-        self.global_templates_dir.mkdir(parents=True, exist_ok=True)
-        self._ensure_default_templates()
-
-    def _ensure_default_templates(self) -> None:
-        """Crea las plantillas agnósticas por defecto en data/templates/ si no existen."""
-        default_urd = """# Documento de Requisitos de Usuario (URD) - {{PROJECT_NAME}}\n\n## 1. Introducción y Alcance\nEste documento define los Requisitos de Usuario para el proyecto **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Usuario\n{{MOM_ATOMIC_ITEMS}}\n"""
-        default_srd = """# Documento de Requisitos de Software (SRD) - {{PROJECT_NAME}}\n\n## 1. Introducción y Alcance\nEste documento especifica las capacidades funcionales y no funcionales para **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Software\n{{MOM_ATOMIC_ITEMS}}\n"""
-        default_add = """# Documento de Diseño Arquitectónico (ADD) - {{PROJECT_NAME}}\n\n## 1. Arquitectura General\nDefinición de componentes y límites del sistema para **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Arquitectura\n{{MOM_ATOMIC_ITEMS}}\n"""
-        default_ddd = """# Documento de Diseño Detallado (DDD) - {{PROJECT_NAME}}\n\n## 1. Diseño Estructurado\nDetalle de implementación e interfaces internas para **{{PROJECT_NAME}}**.\n\n## 2. Especificaciones Atómicas de Diseño Detallado\n{{MOM_ATOMIC_ITEMS}}\n"""
-        default_index = """---\nproject: "{{PROJECT_NAME}}"\ntype: "vault-index"\n---\n\n# Vault de Navegación ESA PSS-05: {{PROJECT_NAME}}\n\nBienvenido al espacio de documentación navegable del proyecto **{{PROJECT_NAME}}**.\n\n## Documentos de Fase Completos\n* [[URD]]: Documento de Requisitos de Usuario\n* [[SRD]]: Documento de Requisitos de Software\n* [[ADD]]: Documento de Diseño Arquitectónico\n* [[DDD]]: Documento de Diseño Detallado\n\n## Trazabilidad y Herencia DAG\n* **Cadena de Herencia:** {{INHERITANCE_CHAIN}}\n"""
-
-        templates = {
-            "URD.md.template": default_urd,
-            "SRD.md.template": default_srd,
-            "ADD.md.template": default_add,
-            "DDD.md.template": default_ddd,
-            "INDEX.md.template": default_index,
+    def to_dict(self) -> Dict[str, Any]:
+        data = {
+            "name": self.name,
+            "parents": self.parents,
+            "is_private": self.is_private,
+            "mandatory": self.mandatory
         }
+        if self.target_docs_dir:
+            data["target_docs_dir"] = self.target_docs_dir
+        return data
 
-        for filename, content in templates.items():
-            tpl_path = self.global_templates_dir / filename
-            if not tpl_path.exists():
-                with open(tpl_path, "w", encoding="utf-8") as f:
-                    f.write(content)
-
-    def sync_gitignore_privacy(self, project_name: str, is_private: bool) -> None:
-        """Añade o elimina la ruta del proyecto privado en el archivo .gitignore raíz."""
-        if not self.gitignore_path.exists():
-            return
-
-        rule = f"data/projects/{project_name}/"
-        with open(self.gitignore_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        rule_exists = any(line.strip() == rule for line in lines)
-
-        if is_private and not rule_exists:
-            # Añadir la regla de exclusión al final del gitignore
-            if lines and not lines[-1].endswith("\n"):
-                lines.append("\n")
-            lines.append(f"{rule}\n")
-            with open(self.gitignore_path, "w", encoding="utf-8") as f:
-                f.writelines(lines)
-        elif not is_private and rule_exists:
-            # Eliminar la regla de exclusión si pasó a ser público
-            new_lines = [line for line in lines if line.strip() != rule]
-            with open(self.gitignore_path, "w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-
-    def create_project(self, project_name: str, parent_projects: Optional[List[str]] = None, target_docs_dir: Optional[str] = None, is_private: bool = False) -> Path:
-        proj_dir = self.data_dir / project_name
-        if proj_dir.exists():
-            raise FileExistsError(f"El proyecto '{project_name}' ya existe.")
-
-        for phase in ESAPhase:
-            (proj_dir / "src" / phase.value).mkdir(parents=True, exist_ok=True)
-        
-        (proj_dir / "doc").mkdir(parents=True, exist_ok=True)
-        (proj_dir / "vault").mkdir(parents=True, exist_ok=True)
-        (proj_dir / "templates").mkdir(parents=True, exist_ok=True)
-        
-        meta = {
-            "name": project_name,
-            "version": "0.1.0",
-            "is_private": is_private,
-            "parent_projects": parent_projects or [],
-            "target_docs_dir": target_docs_dir or ""
-        }
-        with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2)
-
-        # Sincronizar estado con .gitignore
-        self.sync_gitignore_privacy(project_name, is_private)
-
-        return proj_dir
-
-    def get_inheritance_chain(self, target_project: str) -> List[str]:
-        """Calcula el orden topológico de resolución de proyectos evitando ciclos."""
-        resolved: List[str] = []
-        visited: Set[str] = set()
-
-        def dfs(p_name: str, path: Set[str]) -> None:
-            if p_name in path:
-                raise ValueError(f"Ciclo de herencia detectado: {' -> '.join(path)} -> {p_name}")
-            if p_name not in visited:
-                visited.add(p_name)
-                path.add(p_name)
-                p_json = self.data_dir / p_name / "project.json"
-                if p_json.exists():
-                    with open(p_json, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                    for parent in data.get("parent_projects", []):
-                        dfs(parent, path)
-                path.remove(p_name)
-                resolved.append(p_name)
-
-        dfs(target_project, set())
-        return resolved
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MOMProjectConfig":
+        return cls(
+            name=data["name"],
+            parents=data.get("parents", []),
+            is_private=data.get("is_private", False),
+            target_docs_dir=data.get("target_docs_dir"),
+            mandatory=data.get("mandatory", True)
+        )
 
 class MOMInheritedRepository:
-    """Repositorio que agrega y consolida los elementos del proyecto objetivo y todos sus ancestros."""
-    def __init__(self, pm: ProjectManager, project_name: str) -> None:
-        self.pm = pm
-        self.project_name = project_name
-        self.chain = pm.get_inheritance_chain(project_name)
-        self.project_dir = pm.data_dir / project_name
+    """Maneja la carga, resolución DAG de herencia y filtrado mandatorio/referencial de proyectos MOM."""
+    def __init__(self, projects_root: Path, target_project_name: str) -> None:
+        self.projects_root = projects_root
+        self.project_name = target_project_name
+        self.project_dir = projects_root / target_project_name
         
-        self.target_docs_dir: Optional[Path] = None
-        self.is_private: bool = False
-        proj_json = self.project_dir / "project.json"
-        if proj_json.exists():
-            with open(proj_json, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                self.is_private = data.get("is_private", False)
-                target_raw = data.get("target_docs_dir", "").strip()
-                if target_raw:
-                    self.target_docs_dir = Path(target_raw)
+        if not self.project_dir.exists():
+            raise FileNotFoundError(f"El proyecto '{target_project_name}' no existe en {projects_root}")
 
-    def list_all_consolidated(self) -> Dict[str, MOMItem]:
-        """Devuelve un mapa con los elementos acumulados, aplicando sobrescritura de especialización."""
-        items: Dict[str, MOMItem] = {}
-        for proj_name in self.chain:
-            proj_src = self.pm.data_dir / proj_name / "src"
-            for phase in ESAPhase:
-                p_dir = proj_src / phase.value
-                if p_dir.exists():
-                    for f_path in p_dir.glob("*.json"):
-                        with open(f_path, "r", encoding="utf-8") as f:
-                            data = json.load(f)
-                            item = MOMItem.from_dict(data)
-                            if not item.metadata.declared_in_project:
-                                item.metadata.declared_in_project = proj_name
-                            items[item.id] = item
+        self.config = self._load_config(self.project_dir)
+        self.chain = self._resolve_inheritance_chain(target_project_name)
+
+    def _load_config(self, project_path: Path) -> MOMProjectConfig:
+        config_file = project_path / "project.json"
+        if not config_file.exists():
+            # Configuración por defecto si no existe project.json
+            return MOMProjectConfig(name=project_path.name)
+        with open(config_file, "r", encoding="utf-8") as f:
+            return MOMProjectConfig.from_dict(json.load(f))
+
+    def _save_config(self, project_path: Path, config: MOMProjectConfig) -> None:
+        config_file = project_path / "project.json"
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
+
+    def _resolve_inheritance_chain(self, start_project: str) -> List[str]:
+        """Resuelve el orden topológico de herencia (DAG) desde los ancestros raíz hasta el proyecto hijo."""
+        visited: Set[str] = set()
+        chain: List[str] = []
+
+        def dfs(p_name: str):
+            if p_name in visited:
+                return
+            visited.add(p_name)
+            p_dir = self.projects_root / p_name
+            if p_dir.exists():
+                cfg = self._load_config(p_dir)
+                for parent in cfg.parents:
+                    dfs(parent)
+            chain.append(p_name)
+
+        dfs(start_project)
+        return chain
+
+    @property
+    def target_docs_dir(self) -> Optional[Path]:
+        if self.config.target_docs_dir:
+            return Path(self.config.target_docs_dir)
+        return None
+
+    def list_local_items(self) -> List[MOMItem]:
+        """Lista los ítems declarados exclusivamente en el proyecto objetivo actual."""
+        items: List[MOMItem] = []
+        specs_dir = self.project_dir / "specs"
+        if not specs_dir.exists():
+            return items
+
+        for json_file in specs_dir.glob("*.json"):
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    item = MOMItem.from_dict(data)
+                    items.append(item)
+            except Exception as e:
+                print(f"⚠️ Error cargando especificación '{json_file.name}': {e}")
         return items
 
-# Version: 0.3.0
+    def list_all_consolidated(self) -> Dict[str, MOMItem]:
+        """
+        Acumula y consolida todas las especificaciones a lo largo de la cadena DAG de herencia.
+        Respeta la regla global 'mandatory':
+          - mandatory = True: El proyecto aporta la totalidad de sus especificaciones.
+          - mandatory = False: El proyecto sólo aporta las especificaciones citadas explícitamente 
+            como 'parent_ids' por algún proyecto hijo.
+        """
+        # Cargar todas las especificaciones por proyecto en la cadena
+        project_items_map: Dict[str, Dict[str, MOMItem]] = {}
+        project_configs: Dict[str, MOMProjectConfig] = {}
+
+        for proj_name in self.chain:
+            p_dir = self.projects_root / proj_name
+            if not p_dir.exists():
+                continue
+
+            cfg = self._load_config(p_dir)
+            project_configs[proj_name] = cfg
+            items_dict: Dict[str, MOMItem] = {}
+
+            specs_dir = p_dir / "specs"
+            if specs_dir.exists():
+                for json_file in specs_dir.glob("*.json"):
+                    try:
+                        with open(json_file, "r", encoding="utf-8") as f:
+                            item = MOMItem.from_dict(json.load(f))
+                            # Registrar origen si no está marcado
+                            if not item.metadata.declared_in_project:
+                                item.metadata.declared_in_project = proj_name
+                            items_dict[item.id] = item
+                    except Exception as e:
+                        print(f"⚠️ Error en '{json_file.name}' de '{proj_name}': {e}")
+
+            project_items_map[proj_name] = items_dict
+
+        # El proyecto objetivo (el último en la cadena) siempre se consolida completo
+        consolidated: Dict[str, MOMItem] = dict(project_items_map.get(self.project_name, {}))
+
+        # Iterar hacia atrás desde los ancestros
+        # Para proyectos con mandatory=False, recopilaremos sólo los IDs necesitados por los hijos
+        for proj_name in reversed(self.chain[:-1]):
+            cfg = project_configs.get(proj_name, MOMProjectConfig(name=proj_name))
+            ancestor_items = project_items_map.get(proj_name, {})
+
+            if cfg.mandatory:
+                # Herencia mandatoria: Se importan todos los ítems del ancestro
+                for item_id, item in ancestor_items.items():
+                    if item_id not in consolidated:
+                        consolidated[item_id] = item
+            else:
+                # Herencia no mandatoria (condicional por referencia/bibliografía):
+                # Se buscan los parent_ids citados activamente por los ítems ya consolidados
+                referenced_ids: Set[str] = set()
+                for active_item in list(consolidated.values()):
+                    for pid in active_item.parent_ids:
+                        referenced_ids.add(pid)
+
+                # Importar sólo los ítems referenciados
+                for ref_id in referenced_ids:
+                    if ref_id in ancestor_items and ref_id not in consolidated:
+                        consolidated[ref_id] = ancestor_items[ref_id]
+
+        return consolidated
+
+    def save_item(self, item: MOMItem) -> Path:
+        """Guarda o actualiza una especificación atómica MOMItem en el proyecto local."""
+        specs_dir = self.project_dir / "specs"
+        specs_dir.mkdir(parents=True, exist_ok=True)
+
+        if not item.metadata.declared_in_project:
+            item.metadata.declared_in_project = self.project_name
+
+        file_path = specs_dir / f"{item.id}.json"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(item.to_dict(), f, indent=2, ensure_ascii=False)
+
+        return file_path
+
+    def sync_gitignore(self) -> None:
+        """Sincroniza dinámicamente las entradas del archivo .gitignore de la raíz del repositorio según visibilidad."""
+        repo_root = self.projects_root.parent
+        gitignore_path = repo_root / ".gitignore"
+
+        # Leer entradas existentes
+        lines: List[str] = []
+        if gitignore_path.exists():
+            with open(gitignore_path, "r", encoding="utf-8") as f:
+                lines = [line.strip() for line in f.readlines()]
+
+        # Buscar todos los proyectos privados
+        private_projects: List[str] = []
+        for p_dir in self.projects_root.iterdir():
+            if p_dir.is_dir():
+                cfg = self._load_config(p_dir)
+                if cfg.is_private:
+                    private_projects.append(f"data/projects/{p_dir.name}/")
+
+        # Reconstruir o actualizar la sección bloqueada de MOM Privacy Sync
+        new_lines: List[str] = []
+        in_mom_section = False
+
+        for line in lines:
+            if line == "# BEGIN MOM PRIVACY SYNC":
+                in_mom_section = True
+                continue
+            if line == "# END MOM PRIVACY SYNC":
+                in_mom_section = False
+                continue
+            if not in_mom_section:
+                new_lines.append(line)
+
+        # Añadir bloque actualizado
+        new_lines.append("# BEGIN MOM PRIVACY SYNC")
+        for priv_entry in sorted(private_projects):
+            new_lines.append(priv_entry)
+        new_lines.append("# END MOM PRIVACY SYNC")
+
+        with open(gitignore_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(new_lines) + "\n")
+
+class MOMProjectManager:
+    """Gestor global para la creación, enumeración y administración de proyectos en data/projects/."""
+    def __init__(self, projects_root: Path) -> None:
+        self.projects_root = projects_root
+        self.projects_root.mkdir(parents=True, exist_ok=True)
+
+    def list_projects(self) -> List[MOMProjectConfig]:
+        configs: List[MOMProjectConfig] = []
+        for p_dir in self.projects_root.iterdir():
+            if p_dir.is_dir():
+                config_file = p_dir / "project.json"
+                if config_file.exists():
+                    with open(config_file, "r", encoding="utf-8") as f:
+                        configs.append(MOMProjectConfig.from_dict(json.load(f)))
+                else:
+                    configs.append(MOMProjectConfig(name=p_dir.name))
+        return sorted(configs, key=lambda x: x.name)
+
+    def create_project(
+        self,
+        name: str,
+        parents: Optional[List[str]] = None,
+        is_private: bool = False,
+        target_docs_dir: Optional[str] = None,
+        mandatory: bool = True
+    ) -> MOMInheritedRepository:
+        project_dir = self.projects_root / name
+        project_dir.mkdir(parents=True, exist_ok=True)
+
+        (project_dir / "specs").mkdir(exist_ok=True)
+        (project_dir / "doc").mkdir(exist_ok=True)
+        (project_dir / "vault").mkdir(exist_ok=True)
+        (project_dir / "templates").mkdir(exist_ok=True)
+
+        config = MOMProjectConfig(
+            name=name,
+            parents=parents or [],
+            is_private=is_private,
+            target_docs_dir=target_docs_dir,
+            mandatory=mandatory
+        )
+
+        config_file = project_dir / "project.json"
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config.to_dict(), f, indent=2, ensure_ascii=False)
+
+        repo = MOMInheritedRepository(self.projects_root, name)
+        repo.sync_gitignore()
+        return repo
+
+# Version: 0.5.0
