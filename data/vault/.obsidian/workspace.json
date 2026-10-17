@@ -1,24 +1,24 @@
 {
   "main": {
-    "id": "341a61a2d95f96d7",
+    "id": "a1af135813283bb2",
     "type": "split",
     "children": [
       {
-        "id": "201bc0c84e61b36f",
+        "id": "2aa368ed1097b150",
         "type": "tabs",
         "children": [
           {
-            "id": "c7ac3f8b326834b2",
+            "id": "ef5cb67e619c5e7f",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "COR/COR-MOSCON-002.md",
+                "file": "INDEX.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "COR-MOSCON-002"
+              "title": "INDEX"
             }
           }
         ]
@@ -27,15 +27,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "3624fad7f8629d25",
+    "id": "0bed1d789a1397b0",
     "type": "split",
     "children": [
       {
-        "id": "f6715ee011403214",
+        "id": "b75e2b19fa64d420",
         "type": "tabs",
         "children": [
           {
-            "id": "e547be069c460637",
+            "id": "3b943e8ae9bc9668",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -50,7 +50,7 @@
             }
           },
           {
-            "id": "bd901b1278b022ce",
+            "id": "d4422e868c93aef3",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -67,7 +67,7 @@
             }
           },
           {
-            "id": "19c6fa298d01ddef",
+            "id": "c89f31d74ce80edf",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -86,20 +86,20 @@
     "width": 300
   },
   "right": {
-    "id": "46af108a5e0cdd75",
+    "id": "fa988fa69d1609fd",
     "type": "split",
     "children": [
       {
-        "id": "c3c5475aa31eecb7",
+        "id": "e559204b10127420",
         "type": "tabs",
         "children": [
           {
-            "id": "fa7b5900bd377c51",
+            "id": "074c6d7dd516601d",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "COR/COR-MOSCON-002.md",
+                "file": "INDEX.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -113,12 +113,12 @@
             }
           },
           {
-            "id": "a6d319ed1e2ae8d3",
+            "id": "fa8f9ea75856c6ef",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "COR/COR-MOSCON-002.md",
+                "file": "INDEX.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -127,7 +127,7 @@
             }
           },
           {
-            "id": "27b7644cc5e9f5ef",
+            "id": "c9d7fee547615bba",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -142,7 +142,7 @@
             }
           },
           {
-            "id": "3beb8287c508f8b4",
+            "id": "8c6eec1c76bd6af9",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -156,12 +156,12 @@
             }
           },
           {
-            "id": "e9c09bc8cc2a0edd",
+            "id": "9500cd5faf31d931",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "COR/COR-MOSCON-002.md",
+                "file": "INDEX.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -188,9 +188,13 @@
       "bases:Crear nueva base": false
     }
   },
-  "active": "e547be069c460637",
+  "active": "ef5cb67e619c5e7f",
   "lastOpenFiles": [
-    "COR/COR-MOSCON-001.md",
-    "COR/COR-MOSCON.md"
+    "INDEX.md",
+    "MOSCON/COR/COR-MOSCON-001.md",
+    "MOM/AGENTS.md",
+    "MOSCON/AGENTS.md",
+    "MOM/COR.md",
+    "MOM/INDEX.md"
   ]
 }

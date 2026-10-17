@@ -15,7 +15,7 @@ schema_version: "0.5.2"
 El motor debe almacenar cada ítem en src//.json y verificar que todo ítem de fase SRD, ADD o DDD tenga asignado obligatoriamente al menos un parent_id existente en el grafo.
 
 ## Trazabilidad y Relaciones
-* **Origen:** `MOM`
+* **Proyecto Origen:** `MOM`
 * **Padres:** [[URD-CORE-001]]
 * **Hijos:** Ninguno
 

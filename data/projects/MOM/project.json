@@ -1,10 +1,11 @@
 {
   "schema_version": "0.5.2",
-  "name": "MOM",
+  "name": "MetsuOS Methodology Framework",
   "parents": [
     "MOSCON"
   ],
   "is_private": false,
   "mandatory": true,
-  "target_docs_dir": "/Users/Metsuke/mom/doc"
+  "target_docs_dir": "/Users/Metsuke/mom/doc",
+  "description": "Metodología atómica y framework de trazabilidad para el desarrollo soberano de software, especificaciones ESA PSS-05 e integración de agentes de IA."
 }

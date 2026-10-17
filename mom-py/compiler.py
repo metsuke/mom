@@ -1,11 +1,12 @@
 import shutil
+import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 from projects import MOMInheritedRepository
 from schemas import ESAPhase, MOMItem, MetsuOSKnowledgeLevel, CURRENT_SCHEMA_VERSION
 
 class MOMCompiler:
-    """Compilador de especificaciones atómicas y generador de entregables con plantillas agnósticas (incluyendo COR y VISION) y Obsidian Vault."""
+    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local y Obsidian Vault Global unificado."""
     def __init__(self, repo: MOMInheritedRepository, target_docs_dir: Optional[Path] = None) -> None:
         self.repo = repo
         self.project_dir = repo.project_dir
@@ -14,12 +15,14 @@ class MOMCompiler:
         self.agents_out = self.project_dir / "AGENTS.md"
         self.target_docs_dir = target_docs_dir or repo.target_docs_dir
         
-        # Jerarquía de plantillas: 1. Proyecto local (data/projects/<proj>/templates) -> 2. Compartidas (data/templates)
+        # Vault global unificado en data/vault/
+        self.global_vault_dir = self.project_dir.parent.parent / "vault"
+        
         self.local_templates_dir = self.project_dir / "templates"
         self.global_templates_dir = self.project_dir.parent.parent / "templates"
 
     def _get_template_content(self, template_name: str) -> Optional[str]:
-        """Obtiene el contenido de una plantilla, priorizando la carpeta local del proyecto sobre la global agnóstica."""
+        """Obtiene el contenido de una plantilla, priorizando la carpeta local sobre la global."""
         local_file = self.local_templates_dir / template_name
         if local_file.exists():
             with open(local_file, "r", encoding="utf-8") as f:
@@ -32,6 +35,18 @@ class MOMCompiler:
                 
         return None
 
+    def _resolve_bidirectional_relationships(self, all_items: Dict[str, MOMItem]) -> None:
+        """Calcula explícitamente los child_ids de cada elemento a partir de los parent_ids declarados."""
+        for item in all_items.values():
+            item.child_ids = []
+
+        for item_id, item in all_items.items():
+            for parent_id in item.parent_ids:
+                if parent_id in all_items:
+                    parent_item = all_items[parent_id]
+                    if item_id not in parent_item.child_ids:
+                        parent_item.child_ids.append(item_id)
+
     def validate_graph(self) -> List[str]:
         """Valida la integridad del grafo ESA/MOM acumulado por herencia."""
         errors: List[str] = []
@@ -42,37 +57,34 @@ class MOMCompiler:
                 if pid not in all_items:
                     errors.append(f"[{item.id}] (de '{item.metadata.declared_in_project}') apunta a parent_id inexistente: '{pid}'")
 
-            # COR y URD pueden no tener padres (son raíces del grafo). Fases posteriores exigen herencia.
             phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
             if phase_val not in ("cor", "urd") and not item.parent_ids:
-                errors.append(f"[{item.id}] El elemento de fase '{phase_val.upper()}' no tiene padres (debe heredar de URD, COR o fases previas).")
+                errors.append(f"[{item.id}] El elemento de fase '{phase_val.upper()}' no tiene padres.")
 
         return errors
 
     def _build_item_markdown_block(self, item: MOMItem) -> str:
-        """Construye un bloque Markdown detallado para un MOMItem, incluyendo metadatos bibliográficos y de evaluación."""
+        """Construye un bloque Markdown detallado para un MOMItem."""
         attr = item.attributes
         meta = item.metadata
 
         guardrail = f"\n> 🛑 **AI Guardrails (Inmutable):** {meta.ai_guardrails}\n" if meta.ai_guardrails else ""
         parents = f"**Padres:** {', '.join([f'[[{pid}]]' for pid in item.parent_ids])}\n" if item.parent_ids else ""
         children = f"**Hijos:** {', '.join([f'[[{cid}]]' for cid in item.child_ids])}\n" if item.child_ids else ""
-        origin = f"**Origen:** `{meta.declared_in_project}`\n"
+        origin_proj = meta.declared_in_project or self.repo.project_name
+        origin = f"**Origen:** `{origin_proj}`\n"
 
-        # Renderización de nivel de conocimiento MetsuOS
         kl_str = ""
         if attr.metsuos_knowledge_level:
             kl_val = attr.metsuos_knowledge_level.value if hasattr(attr.metsuos_knowledge_level, 'value') else str(attr.metsuos_knowledge_level)
             kl_str = f" | **Nivel MetsuOS:** `{kl_val}`"
 
-        # Renderización de evaluación OTAN
         nato_str = ""
         if attr.nato_source_reliability or attr.nato_information_credibility:
             rel = attr.nato_source_reliability or "?"
             cred = attr.nato_information_credibility or "?"
             nato_str = f" | **Evaluación OTAN:** `{rel}{cred}`"
 
-        # Renderización de metadatos bibliográficos
         bib_lines: List[str] = []
         if attr.bib_title or attr.bib_source:
             authors = f" - {', '.join(attr.bib_authors)}" if attr.bib_authors else ""
@@ -95,11 +107,17 @@ class MOMCompiler:
         return block
 
     def compile_obsidian_vault(self) -> None:
-        """Genera notas Markdown individuales en vault/, INDEX.md y copias completas navegables."""
+        """Genera notas Markdown individuales en vault/, INDEX.md y sincroniza con data/vault/."""
+        if self.vault_out.exists():
+            shutil.rmtree(self.vault_out)
         self.vault_out.mkdir(parents=True, exist_ok=True)
-        all_items = self.repo.list_all_consolidated()
 
-        # 1. Notas atómicas individuales por fase
+        all_items = self.repo.list_all_consolidated()
+        
+        # 1. Resolver relaciones bidireccionales de padres e hijos
+        self._resolve_bidirectional_relationships(all_items)
+
+        # 2. Generar notas atómicas locales del proyecto
         for item in all_items.values():
             phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
             phase_dir = self.vault_out / phase_val.upper()
@@ -112,7 +130,6 @@ class MOMCompiler:
             children_links = ", ".join([f"[[{cid}]]" for cid in item.child_ids]) if item.child_ids else "Ninguno"
             guardrail = f"\n> 🛑 **AI Guardrails (Inmutable):** {meta.ai_guardrails}" if meta.ai_guardrails else ""
 
-            # Evaluación y Bibliografía para la nota atómica
             kl_val = attr.metsuos_knowledge_level.value if hasattr(attr.metsuos_knowledge_level, 'value') else str(attr.metsuos_knowledge_level) if attr.metsuos_knowledge_level else ""
             kl_field = f'metsuos_knowledge_level: "{kl_val}"\n' if kl_val else ""
             nato_field = f'nato_eval: "{attr.nato_source_reliability or "?"}{attr.nato_information_credibility or "?"}"\n' if (attr.nato_source_reliability or attr.nato_information_credibility) else ""
@@ -125,6 +142,7 @@ class MOMCompiler:
 
             status_val = attr.status.value if hasattr(attr.status, 'value') else str(attr.status)
             prio_val = attr.priority.value if hasattr(attr.priority, 'value') else str(attr.priority)
+            declared_project = meta.declared_in_project or self.repo.project_name
 
             file_content = f"""---
 id: "{item.id}"
@@ -133,7 +151,7 @@ title: "{item.title}"
 status: "{status_val}"
 priority: "{prio_val}"
 author: "{meta.author}"
-declared_in: "{meta.declared_in_project}"
+declared_in: "{declared_project}"
 schema_version: "{item.schema_version}"
 {kl_field}{nato_field}---
 
@@ -143,7 +161,7 @@ schema_version: "{item.schema_version}"
 {item.description}
 {bib_info}
 ## Trazabilidad y Relaciones
-* **Origen:** `{meta.declared_in_project}`
+* **Proyecto Origen:** `{declared_project}`
 * **Padres:** {parents_links}
 * **Hijos:** {children_links}
 {guardrail}
@@ -152,14 +170,12 @@ schema_version: "{item.schema_version}"
             with open(note_file, "w", encoding="utf-8") as f:
                 f.write(file_content)
 
-        # 2. Generación del INDEX.md del Vault basado en la plantilla agnóstica
         index_template = self._get_template_content("INDEX.md.template") or "# INDEX\n\nProyecto: {{PROJECT_NAME}}\n"
         chain_str = " -> ".join(self.repo.chain)
         index_content = index_template.replace("{{PROJECT_NAME}}", self.repo.project_name).replace("{{INHERITANCE_CHAIN}}", chain_str)
         with open(self.vault_out / "INDEX.md", "w", encoding="utf-8") as f:
             f.write(index_content)
 
-        # 3. Copia de los documentos consolidados completos al Vault
         for phase in ESAPhase:
             doc_file = self.doc_out / f"{phase.value.upper()}.md"
             if doc_file.exists():
@@ -172,20 +188,107 @@ schema_version: "{item.schema_version}"
         if self.agents_out.exists():
             shutil.copy(self.agents_out, self.vault_out / "AGENTS.md")
 
+        # 3. Sincronización con el Vault Global Unificado (data/vault/)
+        self._sync_to_global_vault()
+
+    def _sync_to_global_vault(self) -> None:
+        """Sincroniza el Vault del proyecto actual en data/vault/<PROJECT_ID>/ y regenera el INDEX.md Global."""
+        self.global_vault_dir.mkdir(parents=True, exist_ok=True)
+        
+        target_proj_vault = self.global_vault_dir / self.repo.project_name
+        if target_proj_vault.exists():
+            shutil.rmtree(target_proj_vault)
+        
+        shutil.copytree(self.vault_out, target_proj_vault)
+        self._generate_global_vault_index()
+
+    def _generate_global_vault_index(self) -> None:
+        """Genera el INDEX.md raíz de data/vault/ con grafo Mermaid (solo ID en cajas) y leyenda ordenada alfabéticamente."""
+        projects_root = self.project_dir.parent
+        public_projects: Dict[str, dict] = {}
+
+        # 1. Cargar proyectos públicos
+        for p in projects_root.iterdir():
+            p_json = p / "project.json"
+            if p.is_dir() and p_json.exists():
+                try:
+                    with open(p_json, "r", encoding="utf-8") as f:
+                        meta = json.load(f)
+                    if not meta.get("is_private", False):
+                        public_projects[p.name] = {
+                            "id": meta.get("project_id", p.name),
+                            "name": meta.get("name", p.name),
+                            "phase": meta.get("phase", "COR"),
+                            "parents": meta.get("parents", []),
+                            "description": meta.get("description", "Sin descripción")
+                        }
+                except Exception:
+                    pass
+
+        # 2. Generar el grafo Mermaid usando SOLO los ID en los nodos
+        mermaid_lines: List[str] = ["graph TD"]
+        
+        # Declarar nodos solo con su ID
+        for pid in sorted(public_projects.keys()):
+            mermaid_lines.append(f"    {pid}[{pid}]")
+
+        # Declarar relaciones parent -> child
+        for pid, data in sorted(public_projects.items()):
+            for parent_id in data["parents"]:
+                if parent_id in public_projects:
+                    mermaid_lines.append(f"    {parent_id} --> {pid}")
+
+        mermaid_str = "\n".join(mermaid_lines)
+
+        # 3. Generar la leyenda de proyectos ordenada alfabéticamente
+        legend_lines: List[str] = []
+        for pid in sorted(public_projects.keys()):
+            data = public_projects[pid]
+            desc_str = f" - {data['description']}" if data['description'] else ""
+            legend_lines.append(f"1. **[[{pid}/INDEX|{pid}]]**: {data['name']} (`Fase {data['phase']}`){desc_str}")
+
+        legend_str = "\n".join(legend_lines) if legend_lines else "*(No hay proyectos públicos registrados)*"
+
+        # 4. Escribir el INDEX.md principal de data/vault/
+        global_index_content = f"""# 🌐 METSUOS METHODOLOGY (MOM) - VAULT GLOBAL DE CONOCIMIENTO
+
+> **Visión Holística del Sistema:** Este Vault consolida todos los proyectos públicos de MetsuOS y resuelve el grafo DAG de herencia de conocimiento y especificaciones atómicas.
+
+---
+
+## 🌳 Grafo de Jerarquía de Proyectos
+
+```mermaid
+{mermaid_str}
+```
+
+---
+
+## 📋 Leyenda y Accesos Directos a Proyectos
+
+{legend_str}
+
+---
+*Última compilación global realizada por el proyecto: `{self.repo.project_name}`*
+"""
+
+        with open(self.global_vault_dir / "INDEX.md", "w", encoding="utf-8") as f:
+            f.write(global_index_content)
+
     def compile_all(self) -> None:
-        """Genera todos los entregables (VISION, COR, URD, SRD, ADD, DDD) usando plantillas de contexto + volcado atómico."""
+        """Genera todos los entregables usando plantillas de contexto + volcado atómico."""
         self.doc_out.mkdir(parents=True, exist_ok=True)
         self.vault_out.mkdir(parents=True, exist_ok=True)
         all_items = self.repo.list_all_consolidated()
+        
+        self._resolve_bidirectional_relationships(all_items)
 
-        # 1. Compilación del Documento de Visión Narrativa (VISION.md) si existe la plantilla
         vision_template = self._get_template_content("VISION.md.template")
         if vision_template:
             vision_rendered = vision_template.replace("{{PROJECT_NAME}}", self.repo.project_name)
             with open(self.doc_out / "VISION.md", "w", encoding="utf-8") as f:
                 f.write(vision_rendered)
 
-        # 2. Compilación de documentos consolidados por fase ESA/MOM
         for phase in ESAPhase:
             phase_items = [
                 i for i in all_items.values() 
@@ -197,26 +300,22 @@ schema_version: "{item.schema_version}"
             blocks = [self._build_item_markdown_block(item) for item in phase_items]
             items_rendered = "\n\n".join(blocks) if blocks else "*(No hay especificaciones atómicas registradas en esta fase)*"
             
-            # Cargar y renderizar plantilla de fase
             template_str = self._get_template_content(f"{phase.value.upper()}.md.template") or "# Documento ESA\n\n{{MOM_ATOMIC_ITEMS}}\n"
             doc_content = template_str.replace("{{PROJECT_NAME}}", self.repo.project_name).replace("{{MOM_ATOMIC_ITEMS}}", items_rendered)
 
             with open(self.doc_out / f"{phase.value.upper()}.md", "w", encoding="utf-8") as f:
                 f.write(doc_content)
 
-        # 3. Compilación de AGENTS.md acumulado (antes de volcar al Vault)
         guardrail_items = [i for i in all_items.values() if i.metadata and i.metadata.ai_guardrails]
-        blocks = [f"### Componente `{i.id}` ({i.title}) - Origen: `{i.metadata.declared_in_project}`\n> 🛑 **Guardrail Inmutable:** {i.metadata.ai_guardrails}\n" for i in guardrail_items]
+        blocks = [f"### Componente `{i.id}` ({i.title}) - Origen: `{i.metadata.declared_in_project or self.repo.project_name}`\n> 🛑 **Guardrail Inmutable:** {i.metadata.ai_guardrails}\n" for i in guardrail_items]
         agents_content = f"# AGENTS.md - Contexto de Onboarding e Instrucciones para IA\n**Proyecto:** {self.repo.project_name} | **Esquema:** v{CURRENT_SCHEMA_VERSION}\n\n"
         agents_content += "\n".join(blocks) if blocks else "*(No se han definido guardrails inmutables en las especificaciones actuales)*"
         
         with open(self.agents_out, "w", encoding="utf-8") as f:
             f.write(agents_content)
 
-        # 4. Compilación del Vault para Obsidian
         self.compile_obsidian_vault()
 
-        # 5. Despliegue en la carpeta target configurada
         if self.target_docs_dir:
             self.target_docs_dir.mkdir(parents=True, exist_ok=True)
             for md_file in self.doc_out.glob("*.md"):
@@ -225,3 +324,5 @@ schema_version: "{item.schema_version}"
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
 # Version: 0.5.2
+# File_Version: 0.5.2.4
+# Schema_Version: 0.5.2
