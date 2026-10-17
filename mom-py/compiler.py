@@ -228,11 +228,9 @@ schema_version: "{item.schema_version}"
         # 2. Generar el grafo Mermaid usando SOLO los ID en los nodos
         mermaid_lines: List[str] = ["graph TD"]
         
-        # Declarar nodos solo con su ID
         for pid in sorted(public_projects.keys()):
             mermaid_lines.append(f"    {pid}[{pid}]")
 
-        # Declarar relaciones parent -> child
         for pid, data in sorted(public_projects.items()):
             for parent_id in data["parents"]:
                 if parent_id in public_projects:
@@ -283,12 +281,36 @@ schema_version: "{item.schema_version}"
         
         self._resolve_bidirectional_relationships(all_items)
 
-        vision_template = self._get_template_content("VISION.md.template")
-        if vision_template:
-            vision_rendered = vision_template.replace("{{PROJECT_NAME}}", self.repo.project_name)
-            with open(self.doc_out / "VISION.md", "w", encoding="utf-8") as f:
-                f.write(vision_rendered)
+        # 1. Compilar VISION.md usando la plantilla genérica e inyectando VISION_PHILOSOPHY.md
+        philosophy_file = self.project_dir / "VISION_PHILOSOPHY.md"
+        if philosophy_file.exists():
+            with open(philosophy_file, "r", encoding="utf-8") as f:
+                philosophy_text = f.read().strip()
+            if not philosophy_text:
+                philosophy_text = "> ⚠️ **[PENDIENTE DE DEFINICIÓN]**\n\n*(El archivo VISION_PHILOSOPHY.md existe pero está vacío. Edita este archivo en el directorio del proyecto para incluir el marco doctrinal de este dominio)*"
+                print(f"⚠️  [ADVERTENCIA] El archivo '{philosophy_file.name}' del proyecto '{self.repo.project_name}' está VACÍO.")
+        else:
+            # Crear el archivo vacío en el disco para facilitar la edición posterior
+            philosophy_file.touch()
+            philosophy_text = "> ⚠️ **[PENDIENTE DE DEFINICIÓN]**\n\n*(No se ha definido un archivo VISION_PHILOSOPHY.md para este proyecto. Se ha creado el archivo vacío en el disco para su edición)*"
+            print(f"\n=======================================================")
+            print(f"⚠️  [ADVERTENCIA] Falta la filosofía del proyecto '{self.repo.project_name}'")
+            print(f"   Se ha creado el archivo vacío en: {philosophy_file}")
+            print(f"   Por favor, edita ese archivo para definir la visión del dominio.")
+            print(f"=======================================================\n")
 
+        vision_template = self._get_template_content("VISION.md.template") or "# VISION\n\n{{PROJECT_PHILOSOPHY}}\n"
+        proj_display_name = self.repo.config.name or self.repo.project_name
+        vision_rendered = (
+            vision_template
+            .replace("{{PROJECT_NAME}}", proj_display_name)
+            .replace("{{PROJECT_ID}}", self.repo.project_name)
+            .replace("{{PROJECT_PHILOSOPHY}}", philosophy_text)
+        )
+        with open(self.doc_out / "VISION.md", "w", encoding="utf-8") as f:
+            f.write(vision_rendered)
+
+        # 2. Compilar documentos por fase ESA
         for phase in ESAPhase:
             phase_items = [
                 i for i in all_items.values() 
@@ -301,14 +323,15 @@ schema_version: "{item.schema_version}"
             items_rendered = "\n\n".join(blocks) if blocks else "*(No hay especificaciones atómicas registradas en esta fase)*"
             
             template_str = self._get_template_content(f"{phase.value.upper()}.md.template") or "# Documento ESA\n\n{{MOM_ATOMIC_ITEMS}}\n"
-            doc_content = template_str.replace("{{PROJECT_NAME}}", self.repo.project_name).replace("{{MOM_ATOMIC_ITEMS}}", items_rendered)
+            doc_content = template_str.replace("{{PROJECT_NAME}}", proj_display_name).replace("{{MOM_ATOMIC_ITEMS}}", items_rendered)
 
             with open(self.doc_out / f"{phase.value.upper()}.md", "w", encoding="utf-8") as f:
                 f.write(doc_content)
 
+        # 3. Compilar AGENTS.md
         guardrail_items = [i for i in all_items.values() if i.metadata and i.metadata.ai_guardrails]
         blocks = [f"### Componente `{i.id}` ({i.title}) - Origen: `{i.metadata.declared_in_project or self.repo.project_name}`\n> 🛑 **Guardrail Inmutable:** {i.metadata.ai_guardrails}\n" for i in guardrail_items]
-        agents_content = f"# AGENTS.md - Contexto de Onboarding e Instrucciones para IA\n**Proyecto:** {self.repo.project_name} | **Esquema:** v{CURRENT_SCHEMA_VERSION}\n\n"
+        agents_content = f"# AGENTS.md - Contexto de Onboarding e Instrucciones para IA\n**Proyecto:** {proj_display_name} | **Esquema:** v{CURRENT_SCHEMA_VERSION}\n\n"
         agents_content += "\n".join(blocks) if blocks else "*(No se han definido guardrails inmutables en las especificaciones actuales)*"
         
         with open(self.agents_out, "w", encoding="utf-8") as f:
@@ -324,5 +347,5 @@ schema_version: "{item.schema_version}"
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
 # Version: 0.5.2
-# File_Version: 0.5.2.4
+# File_Version: 0.5.2.5
 # Schema_Version: 0.5.2

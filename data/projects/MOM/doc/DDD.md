@@ -1,21 +1,21 @@
 ---
 document_type: "DDD"
 standard: "ESA PSS-05"
-project: "MOM"
+project: "MetsuOS Methodology Framework"
 ---
 
 # Documento de Diseño Detallado (DDD)
 
 ## HOJA DE CONTROL DOCUMENTAL
-* **Proyecto:** MOM
-* **Código de Documento:** DDD-MOM
+* **Proyecto:** MetsuOS Methodology Framework
+* **Código de Documento:** DDD-MetsuOS Methodology Framework
 * **Estado:** Consolidado
 
 ---
 
 ## 1. INTRODUCCIÓN
 ### 1.1 Propósito
-Definir de manera exhaustiva las estructuras de datos, firmas de interfaz, funciones y algoritmos internos para el desarrollo de **MOM**.
+Definir de manera exhaustiva las estructuras de datos, firmas de interfaz, funciones y algoritmos internos para el desarrollo de **MetsuOS Methodology Framework**.
 
 ---
 

@@ -1,99 +1,117 @@
 ---
 document_type: "VISION"
 standard: "ESA PSS-05 Pre-Phase / MOM Framework"
-project: "MOSCON (MetsuOS Conocimiento y Etiquetado)"
-version: "1.0.0"
-date: "2026-10-17"
-author: "Metsuke / Equipo de Arquitectura"
-status: "APROBADO"
+project: "MetsuOS Conocimiento - Núcleo y Norma Geopolítica"
+schema_version: "0.5.2"
 ---
 
-# MARCO CONCEPTUAL Y DOCUMENTO DE VISIÓN GENERAL (VISION) - MOSCON
+# MARCO CONCEPTUAL Y DOCUMENTO DE VISIÓN GENERAL (VISION) - MetsuOS Conocimiento - Núcleo y Norma Geopolítica
 
 ## HOJA DE CONTROL DOCUMENTAL
 
 ### INFORMACIÓN GENERAL DEL PROYECTO
-* **Nombre del Proyecto:** MOSCON (MetsuOS Conocimiento y Etiquetado)
-* **Código de Referencia:** MOSCON-COR-VISION-1.0
-* **Entidad / Dominio:** MetsuOS Ecosystem / Knowledge Management
+* **Nombre del Proyecto:** MetsuOS Conocimiento - Núcleo y Norma Geopolítica
+* **Código de Referencia:** MOSCON-COR-VISION
 * **Estándar Metodológico Base:** ESA PSS-05 (Software Engineering Standards) / MOM Framework
-* **Versión Actual:** 1.0.0
-* **Fecha de Emisión:** 17 de Octubre de 2026
-
----
-
-### REGISTRO DE CAMBIOS Y HISTORIAL DE VERSIONES
-| Versión | Descripción del Cambio | Autor / Rol | Fecha |
-| :---: | :--- | :---: | :---: |
-| **1.0.0** | Elaboración inicial del Documento de Visión Narrativa para MOSCON, formalización de la escala cromática de 6 niveles y norma de dominio es-ES. | Metsuke (Arquitecto Principal) | 17/10/2026 |
+* **Esquema MOM:** v0.5.2
+* **Control de Revisiones:** Gestionado automáticamente vía Git Repository
 
 ---
 
 ### LISTA DE DISTRIBUCIÓN
 * **Operadores del Sistema / Mantenedores Humanos**
 * **Agentes de Inteligencia Artificial (AI Operators / Proposals Generators)**
-* **Repositorio de Configuración Abierta de MOSCON**
+* **Repositorio de Configuración Abierta de MetsuOS Conocimiento - Núcleo y Norma Geopolítica**
 
 ---
 
 ## 1. INTRODUCCIÓN Y PROPÓSITO
 
 ### 1.1 Objetivo del Documento
-El presente documento establece la **introducción general, el marco conceptual, las decisiones de soberanía y las reglas de taxonomía** del sistema **MOSCON (MetsuOS Conocimiento y Etiquetado)**.
+El presente documento establece la **introducción general, el marco conceptual, las decisiones de soberanía y los fundamentos doctrinales** del sistema **MetsuOS Conocimiento - Núcleo y Norma Geopolítica**.
 
-Como proyecto derivado de la metodología **MOM**, este documento ofrece una **redacción narrativa continua**, estructurada bajo la rigurosidad formal del estándar **ESA PSS-05**, sirviendo como marco de alineación conceptual previo a la declaración de requisitos atómicos de usuario (`URD`), software (`SRD`) y diseño (`ADD`/`DDD`).
-
-### 1.2 Alcance del Sistema MOSCON
-MOSCON es el módulo central encargado del etiquetado cromático y la clasificación del conocimiento en MetsuOS mediante:
-1. **Escala Cromática de 6 Niveles ("Bolitas de Colores"):** Clasificación del dato desde el ruido/incertidumbre (`⚫① Dark1`) hasta la verdad axiomática/inmutable (`⚪⑥ Light6`).
-2. **Norma Geopolítica `es-ES`:** Establecimiento del español de España como lenguaje operativo y de contexto primario.
-3. **Control de Obsolescencia Temporal ($\lambda$):** Degradación automática de la certidumbre basada en el tiempo y el ratio de caducidad.
+Como proyecto integrado en la metodología **MOM**, este documento ofrece una **redacción narrativa continua**, estructurada bajo la rigurosidad formal del estándar **ESA PSS-05**, sirviendo como marco de alineación conceptual previo a la declaración de requisitos atómicos de usuario (`URD`), software (`SRD`) y diseño (`ADD`/`DDD`).
 
 ---
 
-## 2. MARCO DOCTRINAL Y FILOSOFÍA DE SOBERANÍA (CORPUS - FASE 0)
+## 2. MARCO DOCTRINAL Y FILOSOFÍA DEL PROYECTO
 
-### 2.1 Naturaleza del Documento COR y Pre-URD en MOSCON
-En MetsuOS, la validez del dato, el nivel de certeza y el idioma operativo actúan como restricciones inmutables de **Nivel 0 (COR / Corpus)**.
+MOSCON es el módulo central del ecosistema MetsuOS encargado de la taxonomía, clasificación cromática del conocimiento y establecimiento de la norma de dominio operativo.
 
-El **Corpus de Filosofía y Estándares (COR)** de MOSCON determina:
-* **El Requisito de Usuario (URD):** Ningún elemento de información puede integrarse sin una etiqueta de certidumbre válida.
-* **El Requisito de Software (SRD):** Las estructuras de datos deben incluir obligatoriamente los campos de nivel cromático, idioma y tasa de obsolescencia.
-* **El Diseño de Arquitectura (ADD) y Detallado (DDD):** Los esquemas de persistencia y serialización JSON deben soportar los tipos de estado definidos por MOSCON.
+### 2.1 Principios de Etiquetado y Dominio Operativo
+1. **Escala Cromática de 6 Niveles ("Bolitas de Colores"):** Normaliza la clasificación de cualquier elemento de información o premisa desde la incertidumbre o ruido inicial hasta el axioma inmutable:
+   * `⚫① Dark1`: Ruido / No Evaluado.
+   * `🔴② Red2`: Dudoso / Conflicto o Contradicción.
+   * `🟡③ Yellow3`: En Evaluación / Veracidad Temporal.
+   * `🟢④ Green4`: Confirmado / Fuente Fiable.
+   * `🔵⑤ Blue5`: Demostrado Científicamente.
+   * `⚪⑥ Light6`: Axioma Inmutable.
+2. **Norma Geopolítica y Lenguaje Operativo (`es-ES`):** Exige el español de España como lenguaje primario para garantizar el contexto cultural, técnico y operativo en el procesamiento de especificaciones.
+3. **Control de Obsolescencia Temporal ($\lambda$):** Aplica la degradación automática de certidumbre basada en el paso del tiempo y la caducidad del dato, evitando el anclaje a premisas obsoletas.
 
 ---
 
-## 3. ESCALA CROMÁTICA Y REGLAS DE ETIQUETADO EN MOSCON
+## 3. APLICACIÓN DE LOS CINCO PILARES EPISTEMOLÓGICOS Y SU TRAZABILIDAD CAUSAL
 
-MOSCON implementa formalmente la escala de 6 niveles definida en el sistema oficial:
+Para mitigar el ruido, la desinformación y los sesgos cognitivos propios de la ingesta de datos en el mundo real, la arquitectura del Corpus (Fase 0) articula cinco módulos especializados. Cada bloque cumple una función específica dentro de la cadena de procesamiento del conocimiento:
 
 ```mermaid
 flowchart TD
-    A[Dato Ingestado / Entrada] --> B{Filtro MOSCON}
-    B -->|Nivel 1| C[⚫① Dark1: Ruido / No Evaluado]
-    B -->|Nivel 2| D[🔴② Red2: Dudoso / Conflicto]
-    B -->|Nivel 3| E[🟡③ Yellow3: En Evaluación / Temporal]
-    B -->|Nivel 4| F[🟢④ Green4: Confirmado / Fiable]
-    B -->|Nivel 5| G[🔵⑤ Blue5: Demostrado Científicamente]
-    B -->|Nivel 6| H[⚪⑥ Light6: Axioma Inmutable]
+    A[Datos de Entrada e Incertidumbre] --> B[MOSCON: Etiquetado de Conocimiento y Norma es-ES]
+    B -->|Filtro 1: Sistema de Etiquetado Web y Obsolescencia Temporal| C[AUTHOR: Red Bibliográfica y Auditoría de Fuentes]
+    C -->|Filtro 2: Matriz de Contraste 3 A Favor / 3 En Contra| D[MOSNATO: Inteligencia Militar y Fiabilidad]
+    D -->|Filtro 3: Techo Estricto Green4 y Descarte de Ego| E[MOSPSH: Psicohistoria y Álgebra Probabilística]
+    E -->|Filtro 4: Rango Asintótico -99.99999% a +99.99999% y Ockham Dinámico| F[MOSCPS: Complex Problem Solving]
+    F -->|Filtro 5: Desarticulación de Problemas No Lineales| G[Especificaciones Atómicas Validadas]
 ```
 
 ---
 
-## 4. ESTRUCTURA Y CICLO DE VIDA EN ESA PSS-05 / MOSCON
+## 4. ESTRUCTURA Y CICLO DE VIDA EN ESA PSS-05 / MOM
 
-El desarrollo y despliegue del sistema sigue las 5 fases estandarizadas de MOM:
+El ciclo de vida en MetsuOS Conocimiento - Núcleo y Norma Geopolítica sigue una progresión formal de 5 fases interconectadas:
 
 ```mermaid
 graph LR
-    COR[Fase 0: COR - Corpus Taxonómico] --> URD[Fase 1: URD - Requisitos de Conocimiento]
-    URD --> SRD[Fase 2: SRD - Requisitos de Software / JSON]
-    SRD --> ADD[Fase 3: ADD - Arquitectura / Persistencia]
-    ADD --> DDD[Fase 4: DDD - Diseño Detallado / Tipos]
+    COR[Fase 0: COR - Corpus] --> URD[Fase 1: URD - Requisitos Usuario]
+    URD --> SRD[Fase 2: SRD - Requisitos Software]
+    SRD --> ADD[Fase 3: ADD - Diseño Arquitectura]
+    ADD --> DDD[Fase 4: DDD - Diseño Detallado]
 ```
+
+### 4.1 Descripción Narrativa de las Fases
+
+#### Fase 0: COR (Corpus de Filosofía, Axiomas, Epistemología y Estándares)
+* **Propósito:** Definir los marcos éticos, tecnológicos, epistemológicos (`MOSCON`, `AUTHOR`, `MOSNATO`, `MOSPSH`, `MOSCPS`) y de soberanía del proyecto.
+* **Carácter:** Raíz inmutable del grafo de herencia.
+
+#### Fase 1: URD (User Requirements Document)
+* **Propósito:** Especificar las necesidades operativas del usuario final o del cliente.
+* **Carácter:** Define qué debe hacer el sistema desde una perspectiva funcional, vinculándose formalmente a los axiomas y límites del `COR`.
+
+#### Fase 2: SRD (Software Requirements Document)
+* **Propósito:** Traducir los `URD` a requisitos técnicos verificables de software.
+* **Carácter:** Define las interfaces, formatos de datos, límites de memoria y métodos de verificación (`TEST`, `INSPECTION`, `ANALYSIS`, `DEMONSTRATION`).
+
+#### Fase 3: ADD (Architectural Design Document)
+* **Propósito:** Definir la estructura modular de alto nivel, la descomposición en subsistemas y la estrategia de persistencia/red.
+* **Carácter:** Mapea la transformación de `SRD` a módulos arquitectónicos concretos.
+
+#### Fase 4: DDD (Detailed Design Document)
+* **Propósito:** Especificar las estructuras de datos exactas, algoritmos, firmas de funciones y modelos de clases/ficheros.
+* **Carácter:** Base directa para la codificación y compilación.
 
 ---
 
-## 5. CONCLUSIÓN Y CONTINUIDAD OPERATIVA
+## 5. GOBERNANZA Y MODO DE TRABAJO CON INTELIGENCIA ARTIFICIAL
 
-Este documento constituye la piedra angular conceptual del proyecto **MOSCON**. Toda especificación atómica creada en `data/projects/MOSCON/specs/` y toda compilación documental hacia `doc/` y `vault/` se fundamentan en los principios narrativos de etiquetado y certeza establecidos en esta Visión.
+MetsuOS Conocimiento - Núcleo y Norma Geopolítica establece una separación clara de roles para prevenir el descontrol de código o especificaciones generadas automáticamente:
+
+1. **Agentes de IA (Proposers):** Leen el contexto del proyecto (`AGENTS.md`, notas del `vault/` de Obsidian y especificaciones consolidadas) y generan propuestas atómicas estructuradas en `data/ai-proposals/`.
+2. **Operador Humano (Approver):** Ejecuta la herramienta de gestión CLI (`cli.py`), revisa las propuestas en orden estricto de llegada (FIFO), evalúa los *AI Guardrails* e integra o descarta los elementos.
+
+---
+
+## 6. CONCLUSIÓN Y CONTINUIDAD OPERATIVA
+
+Este documento constituye la piedra angular narrativa del proyecto **MetsuOS Conocimiento - Núcleo y Norma Geopolítica**. Toda iteración sobre el código o sobre los proyectos creados dentro de la estructura `data/projects/` toma esta visión como el marco doctrinal predeterminado.

@@ -1,21 +1,21 @@
 ---
 document_type: "COR"
 standard: "ESA PSS-05 Pre-Phase / MOM Corpus"
-project: "MOSCON"
+project: "MetsuOS Conocimiento - Núcleo y Norma Geopolítica"
 ---
 
 # Corpus de Filosofía, Axiomas y Estándares Tecnológicos (COR)
 
 ## HOJA DE CONTROL DOCUMENTAL
-* **Proyecto:** MOSCON
-* **Código de Documento:** COR-MOSCON
+* **Proyecto:** MetsuOS Conocimiento - Núcleo y Norma Geopolítica
+* **Código de Documento:** COR-MetsuOS Conocimiento - Núcleo y Norma Geopolítica
 * **Estado:** Consolidado / Fuente de Verdad
 
 ---
 
 ## 1. INTRODUCCIÓN Y MARCO FILOSÓFICO
 ### 1.1 Declaración de Intenciones y Declaración de Soberanía
-Este documento establece el marco doctrinal, los principios axiológicos, las decisiones de soberanía tecnológica y los estándares fundamentales que rigen el proyecto **MOSCON**.
+Este documento establece el marco doctrinal, los principios axiológicos, las decisiones de soberanía tecnológica y los estándares fundamentales que rigen el proyecto **MetsuOS Conocimiento - Núcleo y Norma Geopolítica**.
 
 ### 1.2 Naturaleza Operativa
 Las especificaciones atómicas contenidas en este documento no constituyen funcionalidades de usuario final, sino **condiciones de contorno e imperativos filosóficos/tecnológicos**. Todos los Requisitos de Usuario (URD) y Requisitos de Software (SRD) heredan y están subordinados a las directrices de este Corpus.
