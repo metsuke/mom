@@ -1,21 +1,21 @@
 ---
 document_type: "SRD"
 standard: "ESA PSS-05"
-project: "MOM"
+project: "MetsuOS Methodology Framework"
 ---
 
 # Documento de Requisitos de Software (SRD)
 
 ## HOJA DE CONTROL DOCUMENTAL
-* **Proyecto:** MOM
-* **Código de Documento:** SRD-MOM
+* **Proyecto:** MetsuOS Methodology Framework
+* **Código de Documento:** SRD-MetsuOS Methodology Framework
 * **Estado:** Consolidado
 
 ---
 
 ## 1. INTRODUCCIÓN
 ### 1.1 Propósito
-Especificar técnicamente las capacidades funcionales, no funcionales y de rendimiento del software para **MOM**.
+Especificar técnicamente las capacidades funcionales, no funcionales y de rendimiento del software para **MetsuOS Methodology Framework**.
 
 ### 1.2 Alcance
 Traducción técnica formal de las necesidades expresadas en el Documento de Requisitos de Usuario (URD).

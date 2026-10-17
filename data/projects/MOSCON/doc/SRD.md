@@ -1,21 +1,21 @@
 ---
 document_type: "SRD"
 standard: "ESA PSS-05"
-project: "MOSCON"
+project: "MetsuOS Conocimiento - Núcleo y Norma Geopolítica"
 ---
 
 # Documento de Requisitos de Software (SRD)
 
 ## HOJA DE CONTROL DOCUMENTAL
-* **Proyecto:** MOSCON
-* **Código de Documento:** SRD-MOSCON
+* **Proyecto:** MetsuOS Conocimiento - Núcleo y Norma Geopolítica
+* **Código de Documento:** SRD-MetsuOS Conocimiento - Núcleo y Norma Geopolítica
 * **Estado:** Consolidado
 
 ---
 
 ## 1. INTRODUCCIÓN
 ### 1.1 Propósito
-Especificar técnicamente las capacidades funcionales, no funcionales y de rendimiento del software para **MOSCON**.
+Especificar técnicamente las capacidades funcionales, no funcionales y de rendimiento del software para **MetsuOS Conocimiento - Núcleo y Norma Geopolítica**.
 
 ### 1.2 Alcance
 Traducción técnica formal de las necesidades expresadas en el Documento de Requisitos de Usuario (URD).

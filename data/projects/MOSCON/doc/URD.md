@@ -1,21 +1,21 @@
 ---
 document_type: "URD"
 standard: "ESA PSS-05"
-project: "MOSCON"
+project: "MetsuOS Conocimiento - Núcleo y Norma Geopolítica"
 ---
 
 # Documento de Requisitos de Usuario (URD)
 
 ## HOJA DE CONTROL DOCUMENTAL
-* **Proyecto:** MOSCON
-* **Código de Documento:** URD-MOSCON
+* **Proyecto:** MetsuOS Conocimiento - Núcleo y Norma Geopolítica
+* **Código de Documento:** URD-MetsuOS Conocimiento - Núcleo y Norma Geopolítica
 * **Estado:** Consolidado
 
 ---
 
 ## 1. INTRODUCCIÓN
 ### 1.1 Propósito
-El propósito de este documento es definir formalmente las necesidades y requisitos de los usuarios del sistema **MOSCON**.
+El propósito de este documento es definir formalmente las necesidades y requisitos de los usuarios del sistema **MetsuOS Conocimiento - Núcleo y Norma Geopolítica**.
 
 ### 1.2 Alcance
 Este documento constituye la base para la fase de definición de requisitos de software y servirá como criterio final de aceptación por parte del cliente/usuario.
@@ -30,7 +30,7 @@ Equipo directivo, analistas de negocio, arquitectos de software y agentes de aut
 
 ## 2. DESCRIPCIÓN GENERAL
 ### 2.1 Visión General del Sistema
-Breve contextualización de las capacidades solicitadas para el proyecto **MOSCON**.
+Breve contextualización de las capacidades solicitadas para el proyecto **MetsuOS Conocimiento - Núcleo y Norma Geopolítica**.
 
 ### 2.2 Características de los Usuarios
 Definición de perfiles, roles y permisos esperados.

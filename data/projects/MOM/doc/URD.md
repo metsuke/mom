@@ -1,21 +1,21 @@
 ---
 document_type: "URD"
 standard: "ESA PSS-05"
-project: "MOM"
+project: "MetsuOS Methodology Framework"
 ---
 
 # Documento de Requisitos de Usuario (URD)
 
 ## HOJA DE CONTROL DOCUMENTAL
-* **Proyecto:** MOM
-* **Código de Documento:** URD-MOM
+* **Proyecto:** MetsuOS Methodology Framework
+* **Código de Documento:** URD-MetsuOS Methodology Framework
 * **Estado:** Consolidado
 
 ---
 
 ## 1. INTRODUCCIÓN
 ### 1.1 Propósito
-El propósito de este documento es definir formalmente las necesidades y requisitos de los usuarios del sistema **MOM**.
+El propósito de este documento es definir formalmente las necesidades y requisitos de los usuarios del sistema **MetsuOS Methodology Framework**.
 
 ### 1.2 Alcance
 Este documento constituye la base para la fase de definición de requisitos de software y servirá como criterio final de aceptación por parte del cliente/usuario.
@@ -30,7 +30,7 @@ Equipo directivo, analistas de negocio, arquitectos de software y agentes de aut
 
 ## 2. DESCRIPCIÓN GENERAL
 ### 2.1 Visión General del Sistema
-Breve contextualización de las capacidades solicitadas para el proyecto **MOM**.
+Breve contextualización de las capacidades solicitadas para el proyecto **MetsuOS Methodology Framework**.
 
 ### 2.2 Características de los Usuarios
 Definición de perfiles, roles y permisos esperados.
