@@ -2,7 +2,7 @@
   "schema_version": "0.5.2",
   "name": "MOM",
   "parents": [],
-  "is_private": true,
+  "is_private": false,
   "mandatory": true,
   "target_docs_dir": "/Users/Metsuke/mom/doc"
 }
