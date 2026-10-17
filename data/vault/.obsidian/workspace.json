@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "INDEX.md",
+                "file": "MOM/VISION.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "INDEX"
+              "title": "VISION"
             }
           }
         ]
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "INDEX.md",
+                "file": "MOM/VISION.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "INDEX.md",
+                "file": "MOM/VISION.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "INDEX.md",
+                "file": "MOM/VISION.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,11 +190,15 @@
   },
   "active": "ef5cb67e619c5e7f",
   "lastOpenFiles": [
+    "MOSCON/VISION.md",
+    "MOSCON/DDD.md",
+    "MOM/VISION.md",
+    "MOM/INDEX.md",
     "INDEX.md",
+    "MOSCON/INDEX.md",
     "MOSCON/COR/COR-MOSCON-001.md",
     "MOM/AGENTS.md",
     "MOSCON/AGENTS.md",
-    "MOM/COR.md",
-    "MOM/INDEX.md"
+    "MOM/COR.md"
   ]
 }
