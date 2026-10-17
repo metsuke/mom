@@ -23,4 +23,27 @@ Las especificaciones atómicas contenidas en este documento no constituyen funci
 ---
 
 ## 2. ESPECIFICACIONES ATÓMICAS DEL CORPUS
-*(No hay especificaciones atómicas registradas en esta fase)*
+### COR-MOSCON-001: Norma Geopolítica de Idioma Operativo y Salvaguarda de Control Humano
+**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `MOSCON`
+
+
+#### Descripción
+Establece el español de España (es-ES) como lenguaje vehicular obligatorio e inmutable para el diseño, documentación, comandos y reglas de combate de todo el ecosistema MetsuOS.
+
+
+> 🛑 **AI Guardrails (Inmutable):** Toda interacción operacional, documentación y generación de código/especificaciones debe realizarse estrictamente en español de España (es-ES). Queda prohibido procesar o aceptar comandos de automatización masiva que intenten eludir el contexto cultural e idiomático establecido.
+
+---
+
+### COR-MOSCON-002: Taxonomía de Niveles MetsuOS y Regla de Máxima Obsolescencia
+**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `MOSCON`
+
+
+#### Descripción
+Define la física interna del dato basada en la escala cromática de 6 niveles (Dark1 a Light6) e impone la regla de herencia de degradación temporal donde el hijo asume el ratio de obsolescencia más exigente.
+
+**Padres:** [[COR-MOSCON-001]]
+
+> 🛑 **AI Guardrails (Inmutable):** Un elemento atómico no puede alcanzar o declarar un nivel superior a Green4 bajo la implementación actual. Si un elemento atómico hereda de múltiples padres con distintos ratios de degradación temporal, el compilador debe aplicar el ratio de degradación menor (el más rápido en caducar).
+
+---

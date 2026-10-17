@@ -1,0 +1,25 @@
+{
+  "schema_version": "0.5.2",
+  "id": "COR-MOSCON-002",
+  "phase": "cor",
+  "title": "Taxonomía de Niveles MetsuOS y Regla de Máxima Obsolescencia",
+  "description": "Define la física interna del dato basada en la escala cromática de 6 niveles (Dark1 a Light6) e impone la regla de herencia de degradación temporal donde el hijo asume el ratio de obsolescencia más exigente.",
+  "parent_ids": [
+    "COR-MOSCON-001"
+  ],
+  "child_ids": [],
+  "attributes": {
+    "status": "DRAFT",
+    "priority": "HIGH",
+    "verification_method": "TEST",
+    "is_user_doc": true,
+    "tags": []
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOSCON",
+    "ai_guardrails": "Un elemento atómico no puede alcanzar o declarar un nivel superior a Green4 bajo la implementación actual. Si un elemento atómico hereda de múltiples padres con distintos ratios de degradación temporal, el compilador debe aplicar el ratio de degradación menor (el más rápido en caducar).",
+    "created_at": "2026-10-17T17:09:16.410375+00:00",
+    "updated_at": "2026-10-17T17:09:16.410375+00:00"
+  }
+}
