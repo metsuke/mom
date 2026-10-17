@@ -4,21 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "640866bc53b28a04",
+        "id": "d6c523d29dba66ba",
         "type": "tabs",
         "children": [
           {
-            "id": "a46dfc51006f2da5",
+            "id": "703165383599f3fa",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "VISION.md",
-                "mode": "source",
-                "source": false
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "VISION"
+              "title": "Nueva pestaña"
             }
           }
         ]
@@ -99,7 +95,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "VISION.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +113,6 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "VISION.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +155,6 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "VISION.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -188,15 +181,15 @@
       "bases:Crear nueva base": false
     }
   },
-  "active": "a46dfc51006f2da5",
+  "active": "703165383599f3fa",
   "lastOpenFiles": [
-    "URD.md",
+    "VISION.md",
     "SRD.md",
+    "URD.md",
     "DDD.md",
     "INDEX.md",
     "URD/URD-CORE-001.md",
     "SRD/SRD-CORE-001.md",
-    "VISION.md",
     "AGENTS.md",
     "ADD.md",
     "COR.md",
