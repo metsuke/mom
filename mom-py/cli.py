@@ -1,5 +1,6 @@
 import sys
 import json
+import re
 import curses
 import argparse
 import datetime
@@ -89,8 +90,7 @@ def select_parent_items_interactively(inherited_repo: MOMInheritedRepository, cu
     ]
 
     if not valid_parents:
-        if current_phase not in (ESAPhase.COR, ESAPhase.URD):
-            print("⚠️ No hay elementos padres disponibles. Debes crear primero un elemento en una fase previa (ej. COR o URD).")
+        print("ℹ️ No hay elementos padres disponibles en el repositorio.")
         return []
 
     try:
@@ -99,110 +99,304 @@ def select_parent_items_interactively(inherited_repo: MOMInheritedRepository, cu
         print(f"⚠️ No se pudo cargar la interfaz TUI ({e}).")
         return []
 
-def menu_create_project(pm: ProjectManager) -> None:
-    print("\n--- 📁 CREAR NUEVO PROYECTO MOM ---")
-    name = input("Nombre del nuevo proyecto: ").strip()
+def get_next_auto_id(inherited_repo: MOMInheritedRepository, phase: ESAPhase, project_id: str, raw_input_id: str) -> str:
+    """Calcula y asigna el siguiente número disponible correlativo si el ID introducido no termina en número."""
+    clean_id = raw_input_id.strip().upper()
+    
+    if re.search(r'-\d{3,}$', clean_id):
+        return clean_id
+
+    prefix = clean_id.rstrip('-')
+    if not prefix:
+        prefix = f"{phase.value.upper()}-{project_id}"
+
+    all_items = inherited_repo.list_all_consolidated()
+    existing_numbers = []
+
+    pattern = re.compile(rf'^{re.escape(prefix)}-(\d+)$')
+    for item_id in all_items.keys():
+        match = pattern.match(item_id)
+        if match:
+            existing_numbers.append(int(match.group(1)))
+
+    next_num = max(existing_numbers) + 1 if existing_numbers else 1
+    return f"{prefix}-{next_num:03d}"
+
+def menu_create_project(pm: ProjectManager) -> Optional[str]:
+    print("\n--- 📁 CREAR NUEVO PROYECTO MOM (Esquema v0.5.2) ---")
+    project_id = input("ID del proyecto (ej. MOSCON): ").strip().upper()
+    if not project_id:
+        print("❌ El ID del proyecto es obligatorio.")
+        return None
+
+    name = input("Nombre descriptivo del proyecto: ").strip()
     if not name:
         print("❌ El nombre no puede estar vacío.")
-        return
+        return None
 
-    is_private = ask_confirmation("¿Este proyecto es PRIVADO? (Si es privado, se excluirá automáticamente en .gitignore)", default=False)
-    parents = select_parent_projects_interactively(pm)
+    phase = input("Fase ESA PSS-05 (COR, URD, SRD, ADD, DDD) [COR]: ").strip().upper() or "COR"
+    is_private = ask_confirmation("¿Este proyecto es PRIVADO? (Excluido en .gitignore)", default=True)
+    mandatory = ask_confirmation("¿Este proyecto es MANDATORIO / OBLIGATORIO para derivados?", default=True)
+
+    decay_raw = input("Ratio de degradación temporal (default_decay_rate) [0.05]: ").strip()
+    try:
+        default_decay_rate = float(decay_raw) if decay_raw else 0.05
+    except ValueError:
+        default_decay_rate = 0.05
+
+    language = input("Idioma operativo primario [es-ES]: ").strip() or "es-ES"
+    description = input("Descripción del proyecto: ").strip()
+
+    parents = select_parent_projects_interactively(pm, exclude_project=project_id)
     target_docs = input("Ruta externa de exportación de docs (opcional, Enter para omitir): ").strip()
 
     print("\nResumen del nuevo proyecto:")
+    print(f"  • ID de Proyecto: {project_id}")
     print(f"  • Nombre: {name}")
+    print(f"  • Fase ESA: {phase}")
     print(f"  • Visibilidad: {'🔒 PRIVADO (Excluido en .gitignore)' if is_private else '🌐 PÚBLICO (Rastreado en Git)'}")
+    print(f"  • Mandatorio: {'Sí' if mandatory else 'No'}")
+    print(f"  • Ratio Degradación (λ): {default_decay_rate}")
+    print(f"  • Idioma Operativo: {language}")
+    print(f"  • Descripción: {description if description else 'Sin descripción'}")
     print(f"  • Padres (Herencia DAG): {parents if parents else 'Ninguno (Proyecto Raíz)'}")
     print(f"  • Ruta Target Docs: {target_docs if target_docs else 'Sin exportación externa'}")
 
     if ask_confirmation("¿Deseas crear el proyecto con estos datos?"):
         try:
-            repo = pm.create_project(name=name, parents=parents, target_docs_dir=target_docs if target_docs else None, is_private=is_private)
-            print(f"✅ Proyecto '{name}' creado con éxito en: {repo.project_dir}")
+            proj_dir = pm.projects_root / project_id
+            proj_dir.mkdir(parents=True, exist_ok=True)
+            (proj_dir / "specs").mkdir(exist_ok=True)
+
+            meta = {
+                "project_id": project_id,
+                "name": name,
+                "phase": phase,
+                "schema_version": "0.5.2",
+                "parents": parents,
+                "is_private": is_private,
+                "mandatory": mandatory,
+                "default_decay_rate": default_decay_rate,
+                "language": language,
+                "description": description,
+                "target_docs_dir": target_docs if target_docs else None
+            }
+
+            with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2, ensure_ascii=False)
+
+            repo = MOMInheritedRepository(pm.projects_root, project_id)
+            repo.sync_gitignore()
+
+            print(f"✅ Proyecto '{project_id}' creado con éxito en: {proj_dir}")
+            return project_id
         except Exception as e:
             print(f"❌ Error al crear proyecto: {e}")
     else:
         print("🛑 Operación cancelada por el usuario.")
+    return None
 
-def menu_configure_project(pm: ProjectManager) -> None:
-    print("\n--- ⚙️ CONFIGURAR PROYECTO (VISIBILIDAD, HERENCIA Y RUTA TARGET) ---")
-    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
-    if not projects:
-        print("❌ No hay proyectos registrados.")
-        return
+def menu_view_project_details(pm: ProjectManager, active_project: Optional[str] = None) -> None:
+    """OPCIÓN DE VISUALIZACIÓN: Muestra todos los datos de un proyecto e inspecciona su estructura y métricas."""
+    print("\n--- 🔍 VISUALIZAR Y AUDITAR PROYECTO ---")
+    
+    target_project = active_project
+    if not target_project:
+        projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+        if not projects:
+            print("❌ No hay proyectos registrados.")
+            return
 
-    print("Selecciona el proyecto a configurar:")
-    for i, p in enumerate(projects, 1):
-        print(f"  [{i}] {p}")
+        print("Selecciona el proyecto a inspeccionar:")
+        for i, p in enumerate(projects, 1):
+            print(f"  [{i}] {p}")
 
-    try:
-        idx = int(input("Selecciona el número de proyecto: ")) - 1
-        target_project = projects[idx]
-    except (ValueError, IndexError):
-        print("❌ Selección no válida.")
-        return
+        try:
+            idx = int(input("Selecciona el número de proyecto: ")) - 1
+            target_project = projects[idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
 
     proj_json = pm.projects_root / target_project / "project.json"
+    if not proj_json.exists():
+        print(f"❌ No se encontró el fichero project.json para {target_project}.")
+        return
+
+    with open(proj_json, "r", encoding="utf-8") as f:
+        meta = json.load(f)
+
+    repo = MOMInheritedRepository(pm.projects_root, target_project)
+    all_items = repo.list_all_consolidated()
+
+    counts_by_phase: Dict[str, int] = {}
+    local_count = 0
+    inherited_count = 0
+
+    for item in all_items.values():
+        p_val = item.phase.value.upper() if hasattr(item.phase, 'value') else str(item.phase).upper()
+        counts_by_phase[p_val] = counts_by_phase.get(p_val, 0) + 1
+        
+        origin = item.metadata.declared_in_project or target_project
+        if origin == target_project:
+            local_count += 1
+        else:
+            inherited_count += 1
+
+    print("\n=======================================================")
+    print(f" 📄 DATOS DEL PROYECTO: {target_project}")
+    print("=======================================================")
+    print(f"  • ID de Proyecto:      {meta.get('project_id', target_project)}")
+    print(f"  • Nombre Completo:     {meta.get('name', 'N/A')}")
+    print(f"  • Fase Inicial ESA:    {meta.get('phase', 'COR')}")
+    print(f"  • Esquema Compatible:  v{meta.get('schema_version', '0.5.2')}")
+    print(f"  • Visibilidad Git:     {'🔒 PRIVADO (.gitignore)' if meta.get('is_private', True) else '🌐 PÚBLICO'}")
+    print(f"  • Carácter:            {'Mandatorio / Obligatorio' if meta.get('mandatory', True) else 'Opcional / Derivado'}")
+    print(f"  • Ratio Degradación λ: {meta.get('default_decay_rate', 0.05)}")
+    print(f"  • Idioma Operativo:    {meta.get('language', 'es-ES')}")
+    print(f"  • Cadena Herencia DAG: {' -> '.join(repo.chain)}")
+    print(f"  • Ruta Target Export:  {meta.get('target_docs_dir') or 'Sin exportación externa'}")
+    print(f"  • Descripción:        {meta.get('description', 'Sin descripción')}")
+    print("-------------------------------------------------------")
+    print(f" 📊 MÉTRICAS DEL CORPUS DE CONOCIMIENTO:")
+    print(f"  • Ítems Totales Consolidados: {len(all_items)} ({local_count} locales, {inherited_count} heredados)")
+    for phase_name in ["COR", "URD", "SRD", "ADD", "DDD"]:
+        cnt = counts_by_phase.get(phase_name, 0)
+        print(f"    - Fase {phase_name}: {cnt} elemento(s)")
+    print("=======================================================")
+
+def menu_configure_project(pm: ProjectManager, active_project: Optional[str] = None) -> None:
+    print("\n--- ⚙️ CONFIGURAR PROYECTO (VISIBILIDAD, HERENCIA Y METADATOS) ---")
+    
+    target_project = active_project
+    if not target_project:
+        projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+        if not projects:
+            print("❌ No hay proyectos registrados.")
+            return
+
+        print("Selecciona el proyecto a configurar:")
+        for i, p in enumerate(projects, 1):
+            print(f"  [{i}] {p}")
+
+        try:
+            idx = int(input("Selecciona el número de proyecto: ")) - 1
+            target_project = projects[idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
+
+    proj_json = pm.projects_root / target_project / "project.json"
+    if not proj_json.exists():
+        print(f"❌ No se encontró el fichero project.json para {target_project}.")
+        return
+
     with open(proj_json, "r", encoding="utf-8") as f:
         meta = json.load(f)
 
     current_parents = meta.get("parents", meta.get("parent_projects", []))
     current_target = meta.get("target_docs_dir", "")
-    current_private = meta.get("is_private", False)
+    current_private = meta.get("is_private", True)
+    current_mandatory = meta.get("mandatory", True)
+    current_decay = meta.get("default_decay_rate", 0.05)
+    current_lang = meta.get("language", "es-ES")
+    current_desc = meta.get("description", "")
+
+    priv_str = "🔒 PRIVADO" if current_private else "🌐 PÚBLICO"
+    mand_str = "SÍ (Obligatorio)" if current_mandatory else "NO (Opcional)"
 
     print(f"\nConfiguración actual de '{target_project}':")
-    print(f"  • Visibilidad: {'🔒 PRIVADO' if current_private else '🌐 PÚBLICO'}")
+    print(f"  • ID Proyecto: {meta.get('project_id', target_project)}")
+    print(f"  • Nombre: {meta.get('name', target_project)}")
+    print(f"  • Fase: {meta.get('phase', 'COR')}")
+    print(f"  • Visibilidad: {priv_str}")
+    print(f"  • Mandatorio: {mand_str}")
+    print(f"  • Ratio Degradación (λ): {current_decay}")
+    print(f"  • Idioma: {current_lang}")
+    print(f"  • Descripción: {current_desc if current_desc else 'Sin descripción'}")
     print(f"  • Padres: {current_parents if current_parents else 'Ninguno'}")
     print(f"  • Ruta Target Docs: {current_target if current_target else 'Sin configurar'}")
 
-    print("\n¿Qué deseas modificar?")
-    print("  [1] Cambiar visibilidad (Público / Privado en .gitignore)")
-    print("  [2] Modificar proyectos padres (Herencia DAG)")
-    print("  [3] Modificar ruta target de exportación de docs")
+    print("\n¿Qué deseas modificar? (Las opciones de estado muestran su valor actual ANTES de cambiar)")
+    print(f"  [1] Modificar Nombre y Descripción")
+    print(f"  [2] Cambiar visibilidad | Estado actual: {priv_str}")
+    print(f"  [3] Cambiar estado Mandatorio | Estado actual: {mand_str}")
+    print(f"  [4] Modificar proyectos padres (Herencia DAG)")
+    print(f"  [5] Modificar ratio de degradación temporal (default_decay_rate) e Idioma")
+    print(f"  [6] Modificar ruta target de exportación de docs")
     print("  [0] Cancelar")
 
-    opt = input("Opción [0-3]: ").strip()
+    opt = input("Opción [0-6]: ").strip()
     if opt == "1":
-        new_private = not current_private
-        meta["is_private"] = new_private
-        repo = MOMInheritedRepository(pm.projects_root, target_project)
-        repo.config.is_private = new_private
-        repo.sync_gitignore()
-        status_str = "🔒 PRIVADO (regla añadida a .gitignore)" if new_private else "🌐 PÚBLICO (regla eliminada de .gitignore)"
-        print(f"ℹ️ Visibilidad ajustada a: {status_str}")
+        new_name = input(f"Nuevo Nombre [{meta.get('name', target_project)}]: ").strip()
+        if new_name:
+            meta["name"] = new_name
+        new_desc = input(f"Nueva Descripción [{current_desc}]: ").strip()
+        if new_desc:
+            meta["description"] = new_desc
     elif opt == "2":
+        target_priv = not current_private
+        target_str = "🔒 PRIVADO" if target_priv else "🌐 PÚBLICO"
+        if ask_confirmation(f"Estado actual es '{priv_str}'. ¿Deseas cambiar la visibilidad a '{target_str}'?"):
+            meta["is_private"] = target_priv
+            repo = MOMInheritedRepository(pm.projects_root, target_project)
+            repo.config.is_private = target_priv
+            repo.sync_gitignore()
+            print(f"ℹ️ Visibilidad ajustada a: {target_str}")
+    elif opt == "3":
+        target_mand = not current_mandatory
+        target_str = "SÍ (Obligatorio)" if target_mand else "NO (Opcional)"
+        if ask_confirmation(f"Estado actual es '{mand_str}'. ¿Deseas cambiar el carácter del proyecto a '{target_str}'?"):
+            meta["mandatory"] = target_mand
+            print(f"ℹ️ Estado mandatorio ajustado a: {target_str}")
+    elif opt == "4":
         new_parents = select_parent_projects_interactively(pm, exclude_project=target_project, preselected=current_parents)
         meta["parents"] = new_parents
-    elif opt == "3":
+    elif opt == "5":
+        decay_raw = input(f"Nuevo Ratio Degradación [{current_decay}]: ").strip()
+        if decay_raw:
+            try:
+                meta["default_decay_rate"] = float(decay_raw)
+            except ValueError:
+                pass
+        lang_raw = input(f"Nuevo Idioma Operativo [{current_lang}]: ").strip()
+        if lang_raw:
+            meta["language"] = lang_raw
+    elif opt == "6":
         new_target = input("Introduce la nueva ruta target (o pulsa Enter para limpiar/desactivar): ").strip()
         meta["target_docs_dir"] = new_target
     else:
         print("🛑 Cancelado.")
         return
 
+    meta["schema_version"] = "0.5.2"
+
     if ask_confirmation("¿Guardar los cambios de configuración en project.json?"):
         with open(proj_json, "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2, ensure_ascii=False)
         print("✅ Configuración del proyecto actualizada.")
 
-def menu_create_item(pm: ProjectManager) -> None:
-    print("\n--- 📝 CREAR / EDITAR ESPECIFICACIÓN ATÓMICA (JSON) ---")
-    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
-    if not projects:
-        print("❌ No hay proyectos creados. Crea un proyecto primero.")
-        return
-
-    print("Proyectos disponibles:")
-    for i, p in enumerate(projects, 1):
-        print(f"  [{i}] {p}")
+def menu_create_item(pm: ProjectManager, active_project: Optional[str] = None) -> None:
+    """CAMINO 1: Crear un elemento atómico NUEVO con ID correlativo automático."""
+    print("\n--- ➕ CREAR NUEVA ESPECIFICACIÓN ATÓMICA (JSON) ---")
     
-    try:
-        idx = int(input("Selecciona el número de proyecto: ")) - 1
-        target_project = projects[idx]
-    except (ValueError, IndexError):
-        print("❌ Selección no válida.")
-        return
+    target_project = active_project
+    if not target_project:
+        projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+        if not projects:
+            print("❌ No hay proyectos creados. Crea un proyecto primero.")
+            return
+
+        print("Proyectos disponibles:")
+        for i, p in enumerate(projects, 1):
+            print(f"  [{i}] {p}")
+        
+        try:
+            idx = int(input("Selecciona el número de proyecto: ")) - 1
+            target_project = projects[idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
 
     inherited_repo = MOMInheritedRepository(pm.projects_root, target_project)
 
@@ -214,22 +408,20 @@ def menu_create_item(pm: ProjectManager) -> None:
         return
     phase = phase_map[p_choice]
 
-    item_id = input(f"ID del ítem (debe empezar con '{phase.value.upper()}-', ej. {phase.value.upper()}-CORE-001): ").strip()
+    raw_item_id = input(f"ID del ítem (ej. {phase.value.upper()}-{target_project} o Enter para sugerido): ").strip()
+    item_id = get_next_auto_id(inherited_repo, phase, target_project, raw_item_id)
+    print(f"ℹ️ Asignando nuevo ID atómico: {item_id}")
+
     title = input("Título del elemento: ").strip()
     description = input("Descripción detallada del requisito / axioma / diseño: ").strip()
 
-    parent_ids: List[str] = []
-    if phase not in (ESAPhase.COR, ESAPhase.URD):
-        print("\nSelecciona los elementos padres de los que hereda este ítem:")
-        parent_ids = select_parent_items_interactively(inherited_repo, current_phase=phase)
-    elif phase == ESAPhase.URD:
-        if ask_confirmation("¿Deseas vincular este URD con algún axioma del CORPUS o elemento existente?", default=False):
-            parent_ids = select_parent_items_interactively(inherited_repo, current_phase=phase)
+    print("\nSelecciona los elementos padres de los que hereda este ítem (flechas + espacio):")
+    parent_ids = select_parent_items_interactively(inherited_repo, current_phase=phase)
 
     is_user_doc = ask_confirmation("¿Este elemento debe incluirse en el Manual de Usuario u Onboarding?")
     guardrails = input("AI Guardrails / Instrucciones inmutables para la IA (opcional): ").strip() or None
 
-    print("\nPreview de la especificación atómica:")
+    print("\nPreview de la nueva especificación atómica:")
     print(f"  • ID: {item_id}")
     print(f"  • Fase: {phase.value.upper()}")
     print(f"  • Título: {title}")
@@ -255,23 +447,115 @@ def menu_create_item(pm: ProjectManager) -> None:
     else:
         print("🛑 Escritura cancelada.")
 
-def menu_compile_project(pm: ProjectManager) -> None:
-    print("\n--- ⚙️ COMPILACIÓN DE DOCUMENTACIÓN ---")
-    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
-    if not projects:
-        print("❌ No hay proyectos para compilar.")
+def menu_edit_item(pm: ProjectManager, active_project: Optional[str] = None) -> None:
+    """CAMINO 2: Seleccionar un elemento EXISTENTE de una lista para editarlo."""
+    print("\n--- ✏️ EDITAR ESPECIFICACIÓN ATÓMICA EXISTENTE ---")
+    
+    target_project = active_project
+    if not target_project:
+        projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+        if not projects:
+            print("❌ No hay proyectos creados. Crea un proyecto primero.")
+            return
+
+        print("Proyectos disponibles:")
+        for i, p in enumerate(projects, 1):
+            print(f"  [{i}] {p}")
+        
+        try:
+            idx = int(input("Selecciona el número de proyecto: ")) - 1
+            target_project = projects[idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
+
+    inherited_repo = MOMInheritedRepository(pm.projects_root, target_project)
+    all_items = inherited_repo.list_all_consolidated()
+
+    if not all_items:
+        print(f"❌ No existen elementos atómicos creados en el proyecto '{target_project}'. Usa la opción de crear primero.")
         return
 
-    print("Selecciona el proyecto a compilar:")
-    for i, p in enumerate(projects, 1):
-        print(f"  [{i}] {p}")
-    
+    items_list = list(all_items.values())
+    print(f"\nElementos atómicos disponibles en '{target_project}':")
+    for i, it in enumerate(items_list, 1):
+        print(f"  [{i}] {it.id} | [{it.phase.value.upper()}] {it.title}")
+
     try:
-        idx = int(input("Selecciona número: ")) - 1
-        target_project = projects[idx]
+        sel_idx = int(input("\nSelecciona el número de elemento a EDITAR: ")) - 1
+        if not (0 <= sel_idx < len(items_list)):
+            print("❌ Selección fuera de rango.")
+            return
+        existing_item = items_list[sel_idx]
     except (ValueError, IndexError):
         print("❌ Selección no válida.")
         return
+
+    print(f"\n✏️ EDITANDO ELEMENTO ATÓMICO: '{existing_item.id}'")
+    print("ℹ️ Pulsa Enter en cualquier campo para MANTENER el valor actual.")
+
+    title_in = input(f"Título [{existing_item.title}]: ").strip()
+    title = title_in if title_in else existing_item.title
+
+    desc_in = input(f"Descripción [{existing_item.description}]: ").strip()
+    description = desc_in if desc_in else existing_item.description
+
+    print("\nModificar elementos padres de los que hereda (flechas + espacio):")
+    parent_ids = select_parent_items_interactively(inherited_repo, current_phase=existing_item.phase, preselected=existing_item.parent_ids)
+
+    is_user_doc = ask_confirmation("¿Este elemento debe incluirse en el Manual de Usuario u Onboarding?", default=existing_item.attributes.is_user_doc)
+    
+    current_g = existing_item.metadata.ai_guardrails
+    g_suffix = f" [{current_g}]" if current_g else " (opcional)"
+    guardrails_in = input(f"AI Guardrails / Instrucciones inmutables{g_suffix}: ").strip()
+    guardrails = guardrails_in if guardrails_in else current_g
+
+    print("\nPreview de la especificación atómica EDITADA:")
+    print(f"  • ID: {existing_item.id}")
+    print(f"  • Fase: {existing_item.phase.value.upper()}")
+    print(f"  • Título: {title}")
+    print(f"  • Padres: {parent_ids if parent_ids else 'Ninguno'}")
+    print(f"  • Doc Usuario: {is_user_doc}")
+    print(f"  • Guardrails: {guardrails if guardrails else 'Ninguno'}")
+
+    if ask_confirmation("¿Confirmas la actualización de este fichero JSON atómico en el disco?"):
+        try:
+            updated_item = MOMItem(
+                id=existing_item.id,
+                phase=existing_item.phase,
+                title=title,
+                description=description,
+                parent_ids=parent_ids,
+                attributes=ItemAttributes(priority=existing_item.attributes.priority, is_user_doc=is_user_doc),
+                metadata=ItemMetadata(author="Metsuke", declared_in_project=target_project, ai_guardrails=guardrails)
+            )
+            saved_path = inherited_repo.save_item(updated_item)
+            print(f"✅ Ítem '{existing_item.id}' actualizado correctamente en {saved_path}.")
+        except Exception as e:
+            print(f"❌ Error al guardar el ítem: {e}")
+    else:
+        print("🛑 Edición cancelada.")
+
+def menu_compile_project(pm: ProjectManager, active_project: Optional[str] = None) -> None:
+    print("\n--- ⚙️ COMPILACIÓN DE DOCUMENTACIÓN ---")
+    
+    target_project = active_project
+    if not target_project:
+        projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+        if not projects:
+            print("❌ No hay proyectos para compilar.")
+            return
+
+        print("Selecciona el proyecto a compilar:")
+        for i, p in enumerate(projects, 1):
+            print(f"  [{i}] {p}")
+        
+        try:
+            idx = int(input("Selecciona número: ")) - 1
+            target_project = projects[idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
 
     print(f"\nCompilando proyecto '{target_project}' y resolviendo árbol de herencia DAG...")
     repo = MOMInheritedRepository(pm.projects_root, target_project)
@@ -297,7 +581,52 @@ def menu_compile_project(pm: ProjectManager) -> None:
     else:
         print("🛑 Compilación cancelada.")
 
-def menu_review_agent_proposal(pm: ProjectManager) -> None:
+def menu_compile_all_projects(pm: ProjectManager) -> None:
+    """Recorre y compila absolutamente todos los proyectos registrados en data/projects/."""
+    print("\n--- ⚙️ COMPILACIÓN MASIVA DE TODOS LOS PROYECTOS ---")
+    projects = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+    
+    if not projects:
+        print("❌ No hay proyectos registrados para compilar.")
+        return
+
+    print(f"Se han detectado {len(projects)} proyectos en el sistema:")
+    for p in projects:
+        print(f"  • {p}")
+
+    if ask_confirmation("¿Deseas proceder con la compilación masiva de TODOS los proyectos?"):
+        success_count = 0
+        error_count = 0
+        
+        for proj_name in projects:
+            print(f"\n-------------------------------------------------------")
+            print(f"🔄 Compilando proyecto: '{proj_name}'...")
+            try:
+                repo = MOMInheritedRepository(pm.projects_root, proj_name)
+                compiler = MOMCompiler(repo)
+                
+                errors = compiler.validate_graph()
+                if errors:
+                    print(f"❌ Errores de trazabilidad en '{proj_name}':")
+                    for err in errors:
+                        print(f"   • {err}")
+                    error_count += 1
+                    continue
+
+                compiler.compile_all()
+                print(f"✅ Proyecto '{proj_name}' compilado correctamente.")
+                success_count += 1
+            except Exception as e:
+                print(f"❌ Error durante la compilación de '{proj_name}': {e}")
+                error_count += 1
+
+        print(f"\n=======================================================")
+        print(f"📊 RESUMEN DE COMPILACIÓN MASIVA:")
+        print(f"  • Proyectos procesados con éxito: {success_count}/{len(projects)}")
+        print(f"  • Proyectos con errores/abortados: {error_count}")
+        print(f"=======================================================")
+
+def menu_review_agent_proposal(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     print("\n--- 🤖 REVISIÓN Y APROBACIÓN DE PROPUESTAS PENDIENTES DE IA ---")
     proposals_dir = pm.projects_root.parent / "ai-proposals"
     if not proposals_dir.exists():
@@ -323,20 +652,26 @@ def menu_review_agent_proposal(pm: ProjectManager) -> None:
     for proj in proposals_by_project:
         proposals_by_project[proj].sort(key=lambda p: p.stat().st_mtime)
 
-    print("Proyectos con propuestas pendientes de revisión (orden cronológico FIFO):")
-    projects_list = list(proposals_by_project.keys())
-    for i, proj in enumerate(projects_list, 1):
-        count = len(proposals_by_project[proj])
-        print(f"  [{i}] Proyecto '{proj}' ({count} propuesta/s pendiente/s)")
+    target_proj = active_project
+    if not target_proj:
+        print("Proyectos con propuestas pendientes de revisión (orden cronológico FIFO):")
+        projects_list = list(proposals_by_project.keys())
+        for i, proj in enumerate(projects_list, 1):
+            count = len(proposals_by_project[proj])
+            print(f"  [{i}] Proyecto '{proj}' ({count} propuesta/s pendiente/s)")
 
-    try:
-        idx = int(input("\nSelecciona el proyecto a revisar: ")) - 1
-        target_proj = projects_list[idx]
-    except (ValueError, IndexError):
-        print("❌ Selección no válida.")
+        try:
+            idx = int(input("\nSelecciona el proyecto a revisar: ")) - 1
+            target_proj = projects_list[idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
+
+    selected_files = proposals_by_project.get(target_proj, [])
+    if not selected_files:
+        print(f"ℹ️ No hay propuestas pendientes de IA para el proyecto '{target_proj}'.")
         return
 
-    selected_files = proposals_by_project[target_proj]
     print(f"\n--- Revisando {len(selected_files)} propuesta/s para el proyecto '{target_proj}' en ORDEN CRONOLÓGICO ---")
 
     for pf in selected_files:
@@ -376,58 +711,81 @@ def menu_review_agent_proposal(pm: ProjectManager) -> None:
             else:
                 print("⏸️ Propuesta mantenida en 'data/ai-proposals/' para revisión posterior.")
 
+def select_active_project(pm: ProjectManager) -> Optional[str]:
+    """Permite seleccionar de forma transparente el proyecto de trabajo activo."""
+    projs = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
+    if not projs:
+        print("❌ No hay proyectos registrados. Crea uno con la opción [2].")
+        return None
+
+    print("\n--- 🎯 SELECCIONAR PROYECTO DE TRABAJO ACTIVO ---")
+    for i, p in enumerate(projs, 1):
+        repo = MOMInheritedRepository(pm.projects_root, p)
+        print(f"  [{i}] {p} (Herencia: {' -> '.join(repo.chain)})")
+
+    try:
+        idx = int(input("\nSelecciona el número de proyecto activo: ")) - 1
+        if 0 <= idx < len(projs):
+            selected = projs[idx]
+            print(f"✅ Proyecto activo fijado a: '{selected}'")
+            return selected
+        print("❌ Selección fuera de rango.")
+    except ValueError:
+        print("❌ Entrada no válida.")
+    return None
+
 def interactive_main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
     pm = ProjectManager(projects_root=projects_dir)
+    
+    active_project: Optional[str] = "MOSCON" if (projects_dir / "MOSCON").exists() else None
+
     while True:
+        act_str = f" [PROYECTO ACTIVO: {active_project}]" if active_project else " [NINGUNO SELECCIONADO]"
         print("\n=======================================================")
         print("     MOM (MetsuOS Methodology) - MENÚ PRINCIPAL       ")
+        print(f"    {act_str}")
         print("=======================================================")
-        print("  [1] Listar proyectos y estado de la herencia")
+        print("  [1] Seleccionar / Cambiar proyecto activo")
         print("  [2] Crear un nuevo proyecto")
-        print("  [3] Configurar proyecto (Visibilidad, Herencia y Ruta Target)")
-        print("  [4] Crear / Editar especificación atómica (JSON)")
-        print("  [5] Compilar proyecto (Generar doc. MD, Vault Obsidian y AGENTS.md)")
-        print("  [6] Revisar y aprobar/rechazar propuestas de IA (data/ai-proposals/)")
+        print("  [3] Configurar proyecto (Visibilidad, Herencia y Metadatos)")
+        print("  [4] Visualizar datos e inspeccionar proyecto activo")
+        print("  [5] Crear NUEVA especificación atómica (JSON)")
+        print("  [6] Editar especificación atómica EXISTENTE (JSON)")
+        print("  [7] Compilar proyecto activo (Generar doc. MD, Vault Obsidian y AGENTS.md)")
+        print("  [8] Compilar TODOS los proyectos registrados")
+        print("  [9] Revisar y aprobar/rechazar propuestas de IA (data/ai-proposals/)")
         print("  [0] Salir")
         print("-------------------------------------------------------")
-        choice = input("Selecciona una opción [0-6]: ").strip()
+        choice = input("Selecciona una opción [0-9]: ").strip()
 
         if choice == "1":
-            print("\n📋 Proyectos registrados:")
-            projs = [p for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
-            if not projs:
-                print("  (Aún no hay proyectos registrados. Crea uno con la opción [2])")
-            for p in projs:
-                repo = MOMInheritedRepository(pm.projects_root, p.name)
-                chain = repo.chain
-                proj_json = p / "project.json"
-                target_str = ""
-                vis_str = "🌐 Público"
-                if proj_json.exists():
-                    with open(proj_json, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                        if data.get("is_private", False):
-                            vis_str = "🔒 Privado"
-                        t_raw = data.get("target_docs_dir", "").strip()
-                        if t_raw:
-                            target_str = f" | Target Docs: {t_raw}"
-                print(f"  • {p.name} [{vis_str}] (Cadena DAG: {' -> '.join(chain)}{target_str})")
+            selected = select_active_project(pm)
+            if selected:
+                active_project = selected
         elif choice == "2":
-            menu_create_project(pm)
+            new_id = menu_create_project(pm)
+            if new_id:
+                active_project = new_id
         elif choice == "3":
-            menu_configure_project(pm)
+            menu_configure_project(pm, active_project=active_project)
         elif choice == "4":
-            menu_create_item(pm)
+            menu_view_project_details(pm, active_project=active_project)
         elif choice == "5":
-            menu_compile_project(pm)
+            menu_create_item(pm, active_project=active_project)
         elif choice == "6":
-            menu_review_agent_proposal(pm)
+            menu_edit_item(pm, active_project=active_project)
+        elif choice == "7":
+            menu_compile_project(pm, active_project=active_project)
+        elif choice == "8":
+            menu_compile_all_projects(pm)
+        elif choice == "9":
+            menu_review_agent_proposal(pm, active_project=active_project)
         elif choice == "0":
             print("\n👋 Saliendo de MOM. ¡Soberanía y control garantizados!")
             break
         else:
-            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 6.")
+            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 9.")
 
 def main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
@@ -466,3 +824,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.2
+# File_Version: 0.5.2.2
+# Schema_Version: 0.5.2
