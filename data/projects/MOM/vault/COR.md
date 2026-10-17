@@ -30,6 +30,7 @@ Las especificaciones atómicas contenidas en este documento no constituyen funci
 #### Descripción
 Establece el español de España (es-ES) como lenguaje vehicular obligatorio e inmutable para el diseño, documentación, comandos y reglas de combate de todo el ecosistema MetsuOS.
 
+**Hijos:** [[COR-MOSCON-002]]
 
 > 🛑 **AI Guardrails (Inmutable):** Toda interacción operacional, documentación y generación de código/especificaciones debe realizarse estrictamente en español de España (es-ES). Queda prohibido procesar o aceptar comandos de automatización masiva que intenten eludir el contexto cultural e idiomático establecido.
 

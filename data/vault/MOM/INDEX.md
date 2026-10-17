@@ -1,0 +1,32 @@
+# ÍNDICE GENERAL Y NAVEGACIÓN DE VAULT (OBSIDIAN)
+
+* **Proyecto:** MOM
+* **Cadena de Herencia DAG:** `MOSCON -> MOM`
+
+---
+
+## 🗺️ DOCUMENTOS GENERALES Y MARCO CONTEXTUAL
+
+* **[[VISION]]** — *Marco Conceptual e Introducción General (Visión Narrativa)*
+* **[[AGENTS]]** — *Contexto de Onboarding e Instrucciones Inmutables para IA (AI Guardrails)*
+
+---
+
+## 📚 ENTREGABLES Y ESPECIFICACIONES POR FASE (ESA PSS-05 / MOM)
+
+1. **[[COR]]** — *Fase 0: Corpus de Filosofía, Axiomas y Estándares Tecnológicos*
+2. **[[URD]]** — *Fase 1: Documento de Requisitos de Usuario (User Requirements Document)*
+3. **[[SRD]]** — *Fase 2: Documento de Requisitos de Software (Software Requirements Document)*
+4. **[[ADD]]** — *Fase 3: Documento de Diseño de Arquitectura (Architectural Design Document)*
+5. **[[DDD]]** — *Fase 4: Documento de Diseño Detallado (Detailed Design Document)*
+
+---
+
+## 🏷️ ESPECIFICACIONES ATÓMICAS POR CATEGORÍA
+
+Las notas atómicas individuales del proyecto se encuentran agrupadas dentro de sus respectivas carpetas por fase:
+* `vault/COR/`
+* `vault/URD/`
+* `vault/SRD/`
+* `vault/ADD/`
+* `vault/DDD/`

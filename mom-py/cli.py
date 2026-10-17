@@ -197,7 +197,7 @@ def menu_create_project(pm: ProjectManager) -> Optional[str]:
     return None
 
 def menu_view_project_details(pm: ProjectManager, active_project: Optional[str] = None) -> None:
-    """OPCIÓN DE VISUALIZACIÓN: Muestra todos los datos de un proyecto e inspecciona su estructura y métricas."""
+    """Muestra todos los datos de un proyecto e inspecciona su estructura y métricas."""
     print("\n--- 🔍 VISUALIZAR Y AUDITAR PROYECTO ---")
     
     target_project = active_project
@@ -317,7 +317,7 @@ def menu_configure_project(pm: ProjectManager, active_project: Optional[str] = N
     print(f"  • Padres: {current_parents if current_parents else 'Ninguno'}")
     print(f"  • Ruta Target Docs: {current_target if current_target else 'Sin configurar'}")
 
-    print("\n¿Qué deseas modificar? (Las opciones de estado muestran su valor actual ANTES de cambiar)")
+    print("\n¿Qué deseas modificar?")
     print(f"  [1] Modificar Nombre y Descripción")
     print(f"  [2] Cambiar visibilidad | Estado actual: {priv_str}")
     print(f"  [3] Cambiar estado Mandatorio | Estado actual: {mand_str}")
@@ -824,5 +824,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.2
-# File_Version: 0.5.2.2
+# File_Version: 0.5.2.3
 # Schema_Version: 0.5.2
