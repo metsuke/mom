@@ -17,6 +17,6 @@ Define la física interna del dato basada en la escala cromática de 6 niveles (
 ## Trazabilidad y Relaciones
 * **Proyecto Origen:** `MOSCON`
 * **Padres:** [[COR-MOSCON-001]]
-* **Hijos:** Ninguno
+* **Hijos:** [[COR-MOSCON-003]]
 
 > 🛑 **AI Guardrails (Inmutable):** Un elemento atómico no puede alcanzar o declarar un nivel superior a Green4 bajo la implementación actual. Si un elemento atómico hereda de múltiples padres con distintos ratios de degradación temporal, el compilador debe aplicar el ratio de degradación menor (el más rápido en caducar).

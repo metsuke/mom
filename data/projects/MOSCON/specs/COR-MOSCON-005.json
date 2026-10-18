@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.5.2",
+  "id": "COR-MOSCON-005",
+  "phase": "cor",
+  "title": "Álgebra Probabilística (MOSPSH) y Rango Asintótico de Certidumbre",
+  "description": "Asigna un valor numérico continuo de certidumbre en un rango asintótico de -99.99999% a +99.99999% medido en desviaciones estándar (sigmas). Implementa el principio de Ockham Dinámico, conmutando de hipótesis automáticamente cuando la evidencia altera la matriz probabilística.",
+  "parent_ids": [
+    "COR-MOSCON-004"
+  ],
+  "child_ids": [],
+  "attributes": {
+    "status": "DRAFT",
+    "priority": "HIGH",
+    "verification_method": "TEST",
+    "is_user_doc": true,
+    "tags": [
+      "mospsh",
+      "psicohistoria",
+      "probabilidad",
+      "ockham-dinamico"
+    ]
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOSCON",
+    "ai_guardrails": "Ninguna hipótesis o probabilidad asignada por agentes o sistemas puede alcanzar el 100% o -100% absoluto. El valor máximo o mínimo computable se mantiene estrictamente asintótico a +/-99.99999%. Se prohíbe mantener hipótesis previas si la evidencia matemática actualizada Pmax indica una alternativa con mayor certidumbre.",
+    "created_at": "2026-10-17T21:50:00.000000+00:00",
+    "updated_at": "2026-10-17T21:50:00.000000+00:00"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.5.2",
+  "id": "COR-MOSCON-006",
+  "phase": "cor",
+  "title": "Resolución de Problemas Complejos (MOSCPS) y Reglas de Combate Atómicas",
+  "description": "Establece el marco de descomposición de problemas ambiguos, desestructurados y no lineales en subproblemas resolubles. Define las reglas de combate para la búsqueda y estructuración de datos, transformando la incertidumbre informe en especificaciones atómicas ejecutables.",
+  "parent_ids": [
+    "COR-MOSCON-005"
+  ],
+  "child_ids": [],
+  "attributes": {
+    "status": "DRAFT",
+    "priority": "HIGH",
+    "verification_method": "TEST",
+    "is_user_doc": true,
+    "tags": [
+      "moscps",
+      "cps",
+      "problemas-complejos",
+      "reglas-de-combate"
+    ]
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOSCON",
+    "ai_guardrails": "Frente a escenarios desestructurados o ambiguos, el sistema o agente de IA debe aplicar las reglas de combate de MOSCPS para fragmentar la incertidumbre en especificaciones atómicas antes de proponer código o soluciones de diseño.",
+    "created_at": "2026-10-17T21:51:00.000000+00:00",
+    "updated_at": "2026-10-17T21:51:00.000000+00:00"
+  }
+}

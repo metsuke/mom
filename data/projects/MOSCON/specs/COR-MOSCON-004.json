@@ -1,0 +1,30 @@
+{
+  "schema_version": "0.5.2",
+  "id": "COR-MOSCON-004",
+  "phase": "cor",
+  "title": "Matriz de Inteligencia Militarsanitaria (MOSNATO) y Bloqueo del Techo de Certeza",
+  "description": "Adapta el estándar OTAN STANAG 2010 / AJP-2.1 para la evaluación del conocimiento, desacoplando la Fiabilidad de la Fuente (A-F) de la Credibilidad de la Información (1-6). Establece el bloqueo estricto que impide a cualquier evaluación basada en reputación u opinión superar la cota Green4.",
+  "parent_ids": [
+    "COR-MOSCON-003"
+  ],
+  "child_ids": [],
+  "attributes": {
+    "status": "DRAFT",
+    "priority": "HIGH",
+    "verification_method": "TEST",
+    "is_user_doc": true,
+    "tags": [
+      "mosnato",
+      "stanag-2010",
+      "inteligencia",
+      "fiabilidad"
+    ]
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOSCON",
+    "ai_guardrails": "Queda prohibido utilizar la reputación, consenso o prestigio de una fuente para clasificar una información en el nivel Blue5 o Light6. Toda clasificación basada exclusivamente en evaluaciones OTAN o de inteligencia quedará topada en Green4.",
+    "created_at": "2026-10-17T21:47:00.000000+00:00",
+    "updated_at": "2026-10-17T21:47:00.000000+00:00"
+  }
+}

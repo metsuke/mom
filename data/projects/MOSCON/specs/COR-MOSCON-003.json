@@ -1,0 +1,29 @@
+{
+  "schema_version": "0.5.2",
+  "id": "COR-MOSCON-003",
+  "phase": "cor",
+  "title": "Auditoría de Fuentes, Red Bibliográfica (AUTHOR) y Principio del Eslabón Más Débil",
+  "description": "Establece el protocolo de validación bibliográfica y mapeo cruzado de fuentes. Ninguna afirmación de conocimiento puede elevar su certidumbre fuera de ruido (Dark1) sin contar con un contraste mínimo de 3 fuentes independientes a favor y 3 fuentes independientes en contra. La fiabilidad consolidada asume el valor de la fuente más débil del conjunto.",
+  "parent_ids": [
+    "COR-MOSCON-002"
+  ],
+  "child_ids": [],
+  "attributes": {
+    "status": "DRAFT",
+    "priority": "HIGH",
+    "verification_method": "TEST",
+    "is_user_doc": true,
+    "tags": [
+      "author",
+      "bibliografia",
+      "contraste-fuentes"
+    ]
+  },
+  "metadata": {
+    "author": "Metsuke",
+    "declared_in_project": "MOSCON",
+    "ai_guardrails": "Queda estrictamente prohibido validar o dar por confirmada cualquier afirmación o premisa bibliográfica que no cuente con la matriz de contraste de fuentes independientes 3/3. La calificación de fiabilidad derivada de un nodo nunca podrá superar la fiabilidad de la fuente menos fiable que le da soporte.",
+    "created_at": "2026-10-17T21:44:00.000000+00:00",
+    "updated_at": "2026-10-17T21:44:00.000000+00:00"
+  }
+}
