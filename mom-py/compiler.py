@@ -63,6 +63,44 @@ class MOMCompiler:
 
         return errors
 
+    def _build_item_mermaid_local(self, item: MOMItem) -> str:
+        """Genera un diagrama Mermaid local centrado en el elemento, mostrando sus padres e hijos inmediatos."""
+        lines = ["```mermaid", "graph TD"]
+        lines.append(f"    {item.id}[{item.id}]")
+
+        for pid in item.parent_ids:
+            lines.append(f"    {pid}[{pid}] --> {item.id}")
+
+        for cid in item.child_ids:
+            lines.append(f"    {item.id} --> {cid}[{cid}]")
+
+        lines.append("```")
+        return "\n".join(lines)
+
+    def _build_phase_mermaid_graph(self, phase_items: List[MOMItem], all_items: Dict[str, MOMItem]) -> str:
+        """Genera el grafo Mermaid completo para todos los elementos de una fase ESA."""
+        if not phase_items:
+            return "*(No hay elementos para representar en el grafo)*"
+
+        phase_item_ids = {item.id for item in phase_items}
+        lines = ["```mermaid", "graph TD"]
+
+        # Declarar nodos de la fase
+        for item in phase_items:
+            lines.append(f"    {item.id}[{item.id}]")
+
+        # Declarar relaciones hacia padres
+        for item in phase_items:
+            for pid in item.parent_ids:
+                if pid in phase_item_ids:
+                    lines.append(f"    {pid} --> {item.id}")
+                else:
+                    # Padre fuera de la fase actual
+                    lines.append(f"    {pid}[{pid}] -.-> {item.id}")
+
+        lines.append("```")
+        return "\n".join(lines)
+
     def _build_item_markdown_block(self, item: MOMItem) -> str:
         """Construye un bloque Markdown detallado para un MOMItem."""
         attr = item.attributes
@@ -117,7 +155,7 @@ class MOMCompiler:
         # 1. Resolver relaciones bidireccionales de padres e hijos
         self._resolve_bidirectional_relationships(all_items)
 
-        # 2. Generar notas atómicas locales del proyecto
+        # 2. Generar notas atómicas locales del proyecto en vault/
         for item in all_items.values():
             phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
             phase_dir = self.vault_out / phase_val.upper()
@@ -144,6 +182,9 @@ class MOMCompiler:
             prio_val = attr.priority.value if hasattr(attr.priority, 'value') else str(attr.priority)
             declared_project = meta.declared_in_project or self.repo.project_name
 
+            # Grafo Mermaid local del ítem
+            item_mermaid = self._build_item_mermaid_local(item)
+
             file_content = f"""---
 id: "{item.id}"
 phase: "{phase_val}"
@@ -161,6 +202,9 @@ schema_version: "{item.schema_version}"
 {item.description}
 {bib_info}
 ## Trazabilidad y Relaciones
+
+{item_mermaid}
+
 * **Proyecto Origen:** `{declared_project}`
 * **Padres:** {parents_links}
 * **Hijos:** {children_links}
@@ -290,7 +334,6 @@ schema_version: "{item.schema_version}"
                 philosophy_text = "> ⚠️ **[PENDIENTE DE DEFINICIÓN]**\n\n*(El archivo VISION_PHILOSOPHY.md existe pero está vacío. Edita este archivo en el directorio del proyecto para incluir el marco doctrinal de este dominio)*"
                 print(f"⚠️  [ADVERTENCIA] El archivo '{philosophy_file.name}' del proyecto '{self.repo.project_name}' está VACÍO.")
         else:
-            # Crear el archivo vacío en el disco para facilitar la edición posterior
             philosophy_file.touch()
             philosophy_text = "> ⚠️ **[PENDIENTE DE DEFINICIÓN]**\n\n*(No se ha definido un archivo VISION_PHILOSOPHY.md para este proyecto. Se ha creado el archivo vacío en el disco para su edición)*"
             print(f"\n=======================================================")
@@ -319,11 +362,27 @@ schema_version: "{item.schema_version}"
             ]
             phase_items.sort(key=lambda x: x.id)
 
+            # Grafo Mermaid exclusivo de la fase
+            phase_graph = self._build_phase_mermaid_graph(phase_items, all_items)
+
             blocks = [self._build_item_markdown_block(item) for item in phase_items]
             items_rendered = "\n\n".join(blocks) if blocks else "*(No hay especificaciones atómicas registradas en esta fase)*"
             
-            template_str = self._get_template_content(f"{phase.value.upper()}.md.template") or "# Documento ESA\n\n{{MOM_ATOMIC_ITEMS}}\n"
-            doc_content = template_str.replace("{{PROJECT_NAME}}", proj_display_name).replace("{{MOM_ATOMIC_ITEMS}}", items_rendered)
+            template_str = self._get_template_content(f"{phase.value.upper()}.md.template") or f"# Documento ESA - Fase {phase.value.upper()}\n\n## Grafo de Trazabilidad de la Fase\n\n{{MOM_PHASE_GRAPH}}\n\n## Especificaciones Atómicas\n\n{{MOM_ATOMIC_ITEMS}}\n"
+            
+            # Auto-inyección de la sección del grafo si la plantilla local no incluye {{MOM_PHASE_GRAPH}}
+            if "{{MOM_PHASE_GRAPH}}" not in template_str:
+                template_str = template_str.replace(
+                    "{{MOM_ATOMIC_ITEMS}}", 
+                    "## 📊 Grafo de Trazabilidad de la Fase\n\n{{MOM_PHASE_GRAPH}}\n\n---\n\n{{MOM_ATOMIC_ITEMS}}"
+                )
+
+            doc_content = (
+                template_str
+                .replace("{{PROJECT_NAME}}", proj_display_name)
+                .replace("{{MOM_PHASE_GRAPH}}", phase_graph)
+                .replace("{{MOM_ATOMIC_ITEMS}}", items_rendered)
+            )
 
             with open(self.doc_out / f"{phase.value.upper()}.md", "w", encoding="utf-8") as f:
                 f.write(doc_content)
@@ -347,5 +406,5 @@ schema_version: "{item.schema_version}"
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
 # Version: 0.5.2
-# File_Version: 0.5.2.5
+# File_Version: 0.5.2.7
 # Schema_Version: 0.5.2

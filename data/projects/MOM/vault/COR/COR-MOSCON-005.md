@@ -15,6 +15,14 @@ schema_version: "0.5.2"
 Asigna un valor numérico continuo de certidumbre en un rango asintótico de -99.99999% a +99.99999% medido en desviaciones estándar (sigmas). Implementa el principio de Ockham Dinámico, conmutando de hipótesis automáticamente cuando la evidencia altera la matriz probabilística.
 
 ## Trazabilidad y Relaciones
+
+```mermaid
+graph TD
+    COR-MOSCON-005[COR-MOSCON-005]
+    COR-MOSCON-004[COR-MOSCON-004] --> COR-MOSCON-005
+    COR-MOSCON-005 --> COR-MOSCON-006[COR-MOSCON-006]
+```
+
 * **Proyecto Origen:** `MOSCON`
 * **Padres:** [[COR-MOSCON-004]]
 * **Hijos:** [[COR-MOSCON-006]]

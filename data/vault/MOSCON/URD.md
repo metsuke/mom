@@ -41,4 +41,10 @@ Condicionantes de entorno, normativas legales, interoperabilidad o presupuestari
 ---
 
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS DE USUARIO
+## 📊 Grafo de Trazabilidad de la Fase
+
+*(No hay elementos para representar en el grafo)*
+
+---
+
 *(No hay especificaciones atómicas registradas en esta fase)*

@@ -15,6 +15,14 @@ schema_version: "0.5.2"
 Define la física interna del dato basada en la escala cromática de 6 niveles (Dark1 a Light6) e impone la regla de herencia de degradación temporal donde el hijo asume el ratio de obsolescencia más exigente.
 
 ## Trazabilidad y Relaciones
+
+```mermaid
+graph TD
+    COR-MOSCON-002[COR-MOSCON-002]
+    COR-MOSCON-001[COR-MOSCON-001] --> COR-MOSCON-002
+    COR-MOSCON-002 --> COR-MOSCON-003[COR-MOSCON-003]
+```
+
 * **Proyecto Origen:** `MOSCON`
 * **Padres:** [[COR-MOSCON-001]]
 * **Hijos:** [[COR-MOSCON-003]]

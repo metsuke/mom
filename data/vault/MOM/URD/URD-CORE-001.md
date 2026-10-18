@@ -15,6 +15,13 @@ schema_version: "0.5.2"
 El sistema MOM debe permitir declarar especificaciones atómicas en formato JSON agrupadas por las fases URD, SRD, ADD y DDD del estándar ESA PSS-05, garantizando trazabilidad bidireccional y resolución de herencia DAG entre proyectos sin dependencias externas.
 
 ## Trazabilidad y Relaciones
+
+```mermaid
+graph TD
+    URD-CORE-001[URD-CORE-001]
+    URD-CORE-001 --> SRD-CORE-001[SRD-CORE-001]
+```
+
 * **Proyecto Origen:** `MOM`
 * **Padres:** Ninguno (Raíz)
 * **Hijos:** [[SRD-CORE-001]]

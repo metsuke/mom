@@ -41,6 +41,15 @@ Condicionantes de entorno, normativas legales, interoperabilidad o presupuestari
 ---
 
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS DE USUARIO
+## 📊 Grafo de Trazabilidad de la Fase
+
+```mermaid
+graph TD
+    URD-CORE-001[URD-CORE-001]
+```
+
+---
+
 ### URD-CORE-001: Motor de Especificación Atómica y Trazabilidad ESA PSS-05
 **Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `UNIT_TEST` | **Origen:** `MOM`
 

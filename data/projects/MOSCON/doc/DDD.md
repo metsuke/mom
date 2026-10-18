@@ -20,4 +20,10 @@ Definir de manera exhaustiva las estructuras de datos, firmas de interfaz, funci
 ---
 
 ## 2. ESPECIFICACIONES ATÓMICAS DE DISEÑO DETALLADO
+## 📊 Grafo de Trazabilidad de la Fase
+
+*(No hay elementos para representar en el grafo)*
+
+---
+
 *(No hay especificaciones atómicas registradas en esta fase)*

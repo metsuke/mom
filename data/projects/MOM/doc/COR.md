@@ -23,6 +23,25 @@ Las especificaciones atómicas contenidas en este documento no constituyen funci
 ---
 
 ## 2. ESPECIFICACIONES ATÓMICAS DEL CORPUS
+## 📊 Grafo de Trazabilidad de la Fase
+
+```mermaid
+graph TD
+    COR-MOSCON-001[COR-MOSCON-001]
+    COR-MOSCON-002[COR-MOSCON-002]
+    COR-MOSCON-003[COR-MOSCON-003]
+    COR-MOSCON-004[COR-MOSCON-004]
+    COR-MOSCON-005[COR-MOSCON-005]
+    COR-MOSCON-006[COR-MOSCON-006]
+    COR-MOSCON-001 --> COR-MOSCON-002
+    COR-MOSCON-002 --> COR-MOSCON-003
+    COR-MOSCON-003 --> COR-MOSCON-004
+    COR-MOSCON-004 --> COR-MOSCON-005
+    COR-MOSCON-005 --> COR-MOSCON-006
+```
+
+---
+
 ### COR-MOSCON-001: Norma Geopolítica de Idioma Operativo y Salvaguarda de Control Humano
 **Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `MOSCON`
 

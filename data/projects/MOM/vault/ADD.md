@@ -23,4 +23,10 @@ Estrategia de modularización, patrones de diseño y gestión de persistencia/re
 ---
 
 ## 2. ESPECIFICACIONES ATÓMICAS DE ARQUITECTURA
+## 📊 Grafo de Trazabilidad de la Fase
+
+*(No hay elementos para representar en el grafo)*
+
+---
+
 *(No hay especificaciones atómicas registradas en esta fase)*

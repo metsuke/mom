@@ -15,6 +15,14 @@ schema_version: "0.5.2"
 Establece el protocolo de validación bibliográfica y mapeo cruzado de fuentes. Ninguna afirmación de conocimiento puede elevar su certidumbre fuera de ruido (Dark1) sin contar con un contraste mínimo de 3 fuentes independientes a favor y 3 fuentes independientes en contra. La fiabilidad consolidada asume el valor de la fuente más débil del conjunto.
 
 ## Trazabilidad y Relaciones
+
+```mermaid
+graph TD
+    COR-MOSCON-003[COR-MOSCON-003]
+    COR-MOSCON-002[COR-MOSCON-002] --> COR-MOSCON-003
+    COR-MOSCON-003 --> COR-MOSCON-004[COR-MOSCON-004]
+```
+
 * **Proyecto Origen:** `MOSCON`
 * **Padres:** [[COR-MOSCON-002]]
 * **Hijos:** [[COR-MOSCON-004]]

@@ -15,6 +15,14 @@ schema_version: "0.5.2"
 Adapta el estándar OTAN STANAG 2010 / AJP-2.1 para la evaluación del conocimiento, desacoplando la Fiabilidad de la Fuente (A-F) de la Credibilidad de la Información (1-6). Establece el bloqueo estricto que impide a cualquier evaluación basada en reputación u opinión superar la cota Green4.
 
 ## Trazabilidad y Relaciones
+
+```mermaid
+graph TD
+    COR-MOSCON-004[COR-MOSCON-004]
+    COR-MOSCON-003[COR-MOSCON-003] --> COR-MOSCON-004
+    COR-MOSCON-004 --> COR-MOSCON-005[COR-MOSCON-005]
+```
+
 * **Proyecto Origen:** `MOSCON`
 * **Padres:** [[COR-MOSCON-003]]
 * **Hijos:** [[COR-MOSCON-005]]

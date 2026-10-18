@@ -32,4 +32,10 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 ---
 
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS SOFTWARE
+## 📊 Grafo de Trazabilidad de la Fase
+
+*(No hay elementos para representar en el grafo)*
+
+---
+
 *(No hay especificaciones atómicas registradas en esta fase)*

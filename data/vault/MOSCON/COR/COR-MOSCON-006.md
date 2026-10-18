@@ -15,6 +15,13 @@ schema_version: "0.5.2"
 Establece el marco de descomposición de problemas ambiguos, desestructurados y no lineales en subproblemas resolubles. Define las reglas de combate para la búsqueda y estructuración de datos, transformando la incertidumbre informe en especificaciones atómicas ejecutables.
 
 ## Trazabilidad y Relaciones
+
+```mermaid
+graph TD
+    COR-MOSCON-006[COR-MOSCON-006]
+    COR-MOSCON-005[COR-MOSCON-005] --> COR-MOSCON-006
+```
+
 * **Proyecto Origen:** `MOSCON`
 * **Padres:** [[COR-MOSCON-005]]
 * **Hijos:** Ninguno

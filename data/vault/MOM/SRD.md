@@ -32,6 +32,16 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 ---
 
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS SOFTWARE
+## 📊 Grafo de Trazabilidad de la Fase
+
+```mermaid
+graph TD
+    SRD-CORE-001[SRD-CORE-001]
+    URD-CORE-001[URD-CORE-001] -.-> SRD-CORE-001
+```
+
+---
+
 ### SRD-CORE-001: Persistencia JSON Atómica y Trazabilidad por Grafo Directed Acyclic Graph
 **Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `UNIT_TEST` | **Origen:** `MOM`
 
