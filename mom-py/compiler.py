@@ -8,7 +8,7 @@ from projects import MOMInheritedRepository
 from schemas import ESAPhase, MOMItem, MetsuOSKnowledgeLevel, CURRENT_SCHEMA_VERSION
 
 class MOMCompiler:
-    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local, Vault Global e Integración Web."""
+    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local, Vault Global e Integración Web con prefijo MOSDOC- y Frontmatter estricto."""
     def __init__(self, repo: MOMInheritedRepository, target_docs_dir: Optional[Path] = None) -> None:
         self.repo = repo
         self.project_dir = repo.project_dir
@@ -327,7 +327,7 @@ schema_version: "{item.schema_version}"
             f.write(global_index_content)
 
     def _export_to_flat_web_vault(self) -> None:
-        """Exporta TODO el Vault Global a la carpeta web con formato [[enlace_real|etiqueta_local]]."""
+        """Exporta TODO el Vault Global a la carpeta web con el esquema estricto de Frontmatter del documento original."""
         raw_web_dir = self.global_config.get("web_vault_dir")
         if not raw_web_dir:
             return
@@ -339,18 +339,44 @@ schema_version: "{item.schema_version}"
 
         print(f"\n🌐 [WEB VAULT] Sincronizando Vault Global plano en: {web_path}")
 
-        # 1. Limpiar EXCLUSIVAMENTE los archivos que empiezan por 'MOM-'
-        for existing_file in web_path.glob("MOM-*.md"):
+        # 1. Limpiar EXCLUSIVAMENTE los archivos que empiezan por 'MOSDOC-' o antiguos 'MOM-'
+        for existing_file in list(web_path.glob("MOSDOC-*.md")) + list(web_path.glob("MOM-*.md")):
             try:
                 existing_file.unlink()
             except Exception as e:
                 print(f"⚠️ Error al limpiar archivo web previo '{existing_file.name}': {e}")
 
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        now_iso = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         phase_names = {"COR", "URD", "SRD", "ADD", "DDD", "VISION", "AGENTS", "INDEX"}
 
+        def build_strict_frontmatter(tags: List[str]) -> str:
+            """Genera EXACTAMENTE el bloque YAML con solo los metadatos permitidos por la especificidad web."""
+            tag_lines = "\n".join([f'  - "{t}"' for t in tags]) if tags else ""
+            tags_block = f"\ntags:\n{tag_lines}" if tag_lines else "\ntags:"
+
+            return f"""---
+iaStatus: 8
+iaStatus_Model: "MOM 0.5.2.23 MetsuOS Methodology Framework"
+iaStatus_Generado: "I"
+iaStatus_Supervisado: "H"
+iaStatus_Validado: "-"
+a11y: 0
+checked: 0
+lang: ES
+translations: 
+created: {now_iso}
+modified: {now_iso}
+supervisado: ""
+ACCION: ""
+ver_major: 0
+ver_minor: 5
+ver_rev: 23
+nav_primary: 
+nav_secondary: {tags_block}
+---"""
+
         def rewrite_wikilinks(content: str, current_proj_context: str) -> str:
-            """Mapea wikilinks a [[MOM-PROYECTO-RECURSO|ETIQUETA_LOCAL]]."""
+            """Mapea wikilinks al formato [[MOSDOC-PROYECTO-RECURSO|ETIQUETA_LOCAL]] eliminando duplicaciones."""
             def replace_link(match):
                 raw_inner = match.group(1)
                 
@@ -360,30 +386,23 @@ schema_version: "{item.schema_version}"
                     target_part = raw_inner
                     visual_label = raw_inner
 
-                # Manejar rutas con barra ej. [[MOSCON/INDEX]]
+                target_part = re.sub(r'^(MOSDOC-|MOM-|MOS-)+', '', target_part)
+
                 if "/" in target_part:
                     parts = [p for p in target_part.split("/") if p]
-                    if len(parts) >= 2 and parts[1] == "INDEX":
-                        target_part = f"{parts[0]}-INDEX"
-                    elif len(parts) >= 2 and parts[1] in phase_names:
-                        target_part = f"{parts[0]}-{parts[1]}"
-                    else:
-                        target_part = parts[-1]
+                    proj_part = parts[0]
+                    res_part = parts[1] if len(parts) >= 2 else "INDEX"
+                    real_target = f"MOSDOC-{proj_part}-{res_part}"
+                    return f"[[{real_target}|{visual_label}]]"
 
                 segments = target_part.split("-")
 
-                # Calcular el destino real
-                if len(segments) >= 3 and segments[0] == "MOM" and segments[1] == current_proj_context:
-                    real_target = target_part
-                elif len(segments) >= 2 and segments[0] == "MOM":
-                    if segments[1] != current_proj_context:
-                        real_target = f"MOM-{current_proj_context}-" + "-".join(segments[1:])
-                    else:
-                        real_target = target_part
+                if segments[0] == current_proj_context:
+                    real_target = f"MOSDOC-{target_part}"
                 elif target_part.upper() in phase_names:
-                    real_target = f"MOM-{current_proj_context}-{target_part.upper()}"
+                    real_target = f"MOSDOC-{current_proj_context}-{target_part.upper()}"
                 else:
-                    real_target = f"MOM-{current_proj_context}-{target_part}"
+                    real_target = f"MOSDOC-{current_proj_context}-{target_part}"
 
                 return f"[[{real_target}|{visual_label}]]"
 
@@ -402,43 +421,32 @@ schema_version: "{item.schema_version}"
                 all_items = proj_repo.list_all_consolidated()
                 self._resolve_bidirectional_relationships(all_items)
 
-                # Exportar notas atómicas de este proyecto
+                # Exportar notas atómicas
                 for item in all_items.values():
                     phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
                     attr = item.attributes
                     meta = item.metadata
 
-                    web_file_name = f"MOM-{proj_name}-{item.id}.md"
-                    web_item_id = f"MOM-{proj_name}-{item.id}"
+                    web_file_name = f"MOSDOC-{proj_name}-{item.id}.md"
+                    web_item_id = f"MOSDOC-{proj_name}-{item.id}"
 
-                    # Generar enlaces a PADRES resolviendo el proyecto origen real
+                    # Padres e Hijos
                     parents_list = []
-                    parent_yaml_lines = []
                     for pid in item.parent_ids:
                         p_owner = all_items[pid].metadata.declared_in_project if (pid in all_items and all_items[pid].metadata and all_items[pid].metadata.declared_in_project) else proj_name
-                        real_p_id = f"MOM-{p_owner}-{pid}"
-                        parents_list.append(f"[[{real_p_id}|{pid}]]")
-                        parent_yaml_lines.append(f'  - "{real_p_id}"')
+                        parents_list.append(f"[[MOSDOC-{p_owner}-{pid}|{pid}]]")
 
-                    parents_links = ", ".join(parents_list) if parents_list else "Ninguno (Raíz)"
-                    parent_yaml_block = "\n".join(parent_yaml_lines) if parent_yaml_lines else "  []"
-
-                    # Generar enlaces a HIJOS resolviendo el proyecto origen real
                     children_list = []
-                    child_yaml_lines = []
                     for cid in item.child_ids:
                         c_owner = all_items[cid].metadata.declared_in_project if (cid in all_items and all_items[cid].metadata and all_items[cid].metadata.declared_in_project) else proj_name
-                        real_c_id = f"MOM-{c_owner}-{cid}"
-                        children_list.append(f"[[{real_c_id}|{cid}]]")
-                        child_yaml_lines.append(f'  - "{real_c_id}"')
+                        children_list.append(f"[[MOSDOC-{c_owner}-{cid}|{cid}]]")
 
+                    parents_links = ", ".join(parents_list) if parents_list else "Ninguno (Raíz)"
                     children_links = ", ".join(children_list) if children_list else "Ninguno"
-                    child_yaml_block = "\n".join(child_yaml_lines) if child_yaml_lines else "  []"
-
                     guardrail = f"\n> 🛑 **AI Guardrails (Inmutable):** {meta.ai_guardrails}" if meta.ai_guardrails else ""
 
-                    kl_val = attr.metsuos_knowledge_level.value if hasattr(attr.metsuos_knowledge_level, 'value') else str(attr.metsuos_knowledge_level) if attr.metsuos_knowledge_level else ""
-                    nato_eval = f"{attr.nato_source_reliability or '?'}{attr.nato_information_credibility or '?'}" if (attr.nato_source_reliability or attr.nato_information_credibility) else ""
+                    kl_val = attr.metsuos_knowledge_level.value if hasattr(attr.metsuos_knowledge_level, 'value') else str(attr.metsuos_knowledge_level) if attr.metsuos_knowledge_level else "N/A"
+                    nato_eval = f"{attr.nato_source_reliability or '?'}{attr.nato_information_credibility or '?'}" if (attr.nato_source_reliability or attr.nato_information_credibility) else "N/A"
 
                     status_val = attr.status.value if hasattr(attr.status, 'value') else str(attr.status)
                     prio_val = attr.priority.value if hasattr(attr.priority, 'value') else str(attr.priority)
@@ -446,34 +454,28 @@ schema_version: "{item.schema_version}"
 
                     item_mermaid = self._build_item_mermaid_local(item)
 
-                    frontmatter = f"""---
-id: "{web_item_id}"
-title: "{item.title}"
-iaStatus: 8
-IAModel: "MOM 0.5.2.20 MetsuOS Methodology Framework"
-date: "{now_str}"
-lastmod: "{now_str}"
-type: "atomic-spec"
-phase: "{phase_val}"
-status: "{status_val}"
-priority: "{prio_val}"
-author: "{meta.author}"
-declared_in: "{declared_project}"
-schema_version: "{item.schema_version}"
-metsuos_knowledge_level: "{kl_val}"
-nato_eval: "{nato_eval}"
-tags:
-  - "mom"
-  - "{declared_project.lower()}"
-  - "{phase_val}"
-  - "metsuos"
-parent_ids:
-{parent_yaml_block}
-child_ids:
-{child_yaml_block}
----
+                    frontmatter = build_strict_frontmatter(tags=["mom", declared_project.lower(), phase_val, "metsuos"])
+
+                    metadata_table = f"""| Metadato | Valor |
+| :--- | :--- |
+| **Identificador Atómico** | `{web_item_id}` |
+| **Título** | {item.title} |
+| **Tipo de Documento** | `Espec. Atómica (atomic-spec)` |
+| **Fase ESA** | `{phase_val.upper()}` |
+| **Estado** | `{status_val}` |
+| **Prioridad** | `{prio_val}` |
+| **Autor** | `{meta.author}` |
+| **Proyecto Declarado/Origen** | `{declared_project}` |
+| **Versión Esquema** | `{item.schema_version}` |
+| **Nivel MetsuOS** | `{kl_val}` |
+| **Evaluación OTAN** | `{nato_eval}` |
+"""
+
+                    file_content = f"""{frontmatter}
 
 # {item.id}: {item.title}
+
+{metadata_table}
 
 ## Descripción
 {item.description}
@@ -489,7 +491,7 @@ child_ids:
 """
                     dest_file = web_path / web_file_name
                     with open(dest_file, "w", encoding="utf-8") as f:
-                        f.write(frontmatter)
+                        f.write(file_content)
                     updated_count += 1
 
                 # Exportar documentos de Fase, VISION, AGENTS e INDEX de cada proyecto
@@ -503,48 +505,62 @@ child_ids:
                             raw_content = f.read()
 
                         content = rewrite_wikilinks(raw_content, current_proj_context=proj_name)
-                        frontmatter = f"""---
-id: "MOM-{proj_name}-{phase.value.upper()}"
-title: "Documento {phase.value.upper()} - {proj_name}"
-iaStatus: 8
-IAModel: "MOM 0.5.2.20 MetsuOS Methodology Framework"
-date: "{now_str}"
-lastmod: "{now_str}"
-type: "phase-doc"
-phase: "{phase.value.lower()}"
-declared_in: "{proj_name}"
----
+                        frontmatter = build_strict_frontmatter(tags=["mom", proj_name.lower(), phase.value.lower(), "phase-doc"])
+                        
+                        doc_table = f"""| Metadato | Valor |
+| :--- | :--- |
+| **Identificador** | `MOSDOC-{proj_name}-{phase.value.upper()}` |
+| **Tipo de Documento** | `Documento de Fase ESA (phase-doc)` |
+| **Fase** | `{phase.value.upper()}` |
+| **Proyecto** | `{proj_name}` |
+"""
+
+                        file_content = f"""{frontmatter}
+
+# Documento Fase {phase.value.upper()} - {proj_name}
+
+{doc_table}
 
 {content}
 """
-                        dest_file = web_path / f"MOM-{proj_name}-{phase.value.upper()}.md"
+                        dest_file = web_path / f"MOSDOC-{proj_name}-{phase.value.upper()}.md"
                         with open(dest_file, "w", encoding="utf-8") as f:
-                            f.write(frontmatter)
+                            f.write(file_content)
                         updated_count += 1
 
                 for doc_name, doc_type in [("VISION", "vision-doc"), ("AGENTS", "agents-context"), ("INDEX", "project-index")]:
-                    src_file = proj_doc_dir / f"{doc_name}.md" if doc_name != "INDEX" else proj_vault_dir / "INDEX.md"
+                    if doc_name == "AGENTS":
+                        src_file = proj_folder / "AGENTS.md"
+                    elif doc_name == "INDEX":
+                        src_file = proj_vault_dir / "INDEX.md"
+                    else:
+                        src_file = proj_doc_dir / "VISION.md"
+
                     if src_file.exists():
                         with open(src_file, "r", encoding="utf-8") as f:
                             raw_content = f.read()
 
                         content = rewrite_wikilinks(raw_content, current_proj_context=proj_name)
-                        frontmatter = f"""---
-id: "MOM-{proj_name}-{doc_name}"
-title: "{doc_name} - {proj_name}"
-iaStatus: 8
-IAModel: "MOM 0.5.2.20 MetsuOS Methodology Framework"
-date: "{now_str}"
-lastmod: "{now_str}"
-type: "{doc_type}"
-declared_in: "{proj_name}"
----
+                        frontmatter = build_strict_frontmatter(tags=["mom", proj_name.lower(), doc_type])
+                        
+                        doc_table = f"""| Metadato | Valor |
+| :--- | :--- |
+| **Identificador** | `MOSDOC-{proj_name}-{doc_name}` |
+| **Tipo de Documento** | `{doc_type}` |
+| **Proyecto** | `{proj_name}` |
+"""
+
+                        file_content = f"""{frontmatter}
+
+# {doc_name} - {proj_name}
+
+{doc_table}
 
 {content}
 """
-                        dest_file = web_path / f"MOM-{proj_name}-{doc_name}.md"
+                        dest_file = web_path / f"MOSDOC-{proj_name}-{doc_name}.md"
                         with open(dest_file, "w", encoding="utf-8") as f:
-                            f.write(frontmatter)
+                            f.write(file_content)
                         updated_count += 1
 
         # 3. Exportar el INDEX Global Raíz del Vault de MOM
@@ -554,28 +570,31 @@ declared_in: "{proj_name}"
                 raw_content = f.read()
 
             content = rewrite_wikilinks(raw_content, current_proj_context="MOM")
+            global_frontmatter = build_strict_frontmatter(tags=["mom", "global-index"])
 
-            global_frontmatter = f"""---
-id: "MOM-INDEX"
-title: "MetsuOS Methodology (MOM) - Vault Global de Conocimiento"
-iaStatus: 8
-IAModel: "MOM 0.5.2.20 MetsuOS Methodology Framework"
-date: "{now_str}"
-lastmod: "{now_str}"
-type: "project-index"
-declared_in: "MOM"
----
+            global_table = f"""| Metadato | Valor |
+| :--- | :--- |
+| **Identificador Global** | `MOSDOC-INDEX` |
+| **Tipo de Documento** | `project-index` |
+| **Ámbito** | `Vault Global de Conocimiento MOM` |
+"""
+
+            file_content = f"""{global_frontmatter}
+
+# 🌐 METSUOS METHODOLOGY (MOM) - VAULT GLOBAL DE CONOCIMIENTO
+
+{global_table}
 
 {content}
 """
-            with open(web_path / "MOM-INDEX.md", "w", encoding="utf-8") as f:
-                f.write(global_frontmatter)
+            with open(web_path / "MOSDOC-INDEX.md", "w", encoding="utf-8") as f:
+                f.write(file_content)
             updated_count += 1
 
-        print(f"✅ [WEB VAULT] Sincronización completa del Vault Global finalizada ({updated_count} archivos exportados).")
+        print(f"✅ [WEB VAULT] Sincronización completa del Vault Global finalizada ({updated_count} archivos exportados con Frontmatter estricto).")
         print("--------------------------------------------------------------------------------")
-        print(f"📌 Punto de Entrada Web (Índice Global MOM): MOM-INDEX.md")
-        print(f"   Ruta relativa de enlace en tu web: [[MOM-INDEX]]")
+        print(f"📌 Punto de Entrada Web (Índice Global): MOSDOC-INDEX.md")
+        print(f"   Ruta relativa de enlace en tu web: [[MOSDOC-INDEX]]")
         print("--------------------------------------------------------------------------------\n")
 
     def compile_all(self) -> None:
@@ -664,5 +683,5 @@ declared_in: "MOM"
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
 # Version: 0.5.2
-# File_Version: 0.5.2.20
+# File_Version: 0.5.2.23
 # Schema_Version: 0.5.2
