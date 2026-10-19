@@ -8,9 +8,13 @@
 
 ```mermaid
 graph TD
-    MOM[MOM]
-    MOSCON[MOSCON]
-    MOSCON --> MOM
+    MOM["MetsuOS Methodology Framework (MOM)"]
+    MOSCON["MetsuOS Conocimiento - Núcleo y Norma Geopolítica (MOSCON)"]
+    MOSCOR["MetsuOS Consolidated Core Architecture (MOSCOR)"]
+    MOSNATO["MetsuOS NATO Integration & Doctrine Standard (MOSNATO)"]
+    MOSCOR --> MOM
+    MOSNATO --> MOSCON
+    MOSCON --> MOSCOR
 ```
 
 ---
@@ -19,6 +23,8 @@ graph TD
 
 1. **[[MOM/INDEX|MOM]]**: MetsuOS Methodology Framework (`Fase COR`) - Metodología atómica y framework de trazabilidad para el desarrollo soberano de software, especificaciones ESA PSS-05 e integración de agentes de IA.
 1. **[[MOSCON/INDEX|MOSCON]]**: MetsuOS Conocimiento - Núcleo y Norma Geopolítica (`Fase COR`) - Proyecto raíz del Corpus de MOM. Define la física interna del dato, la norma geopolítica de lenguaje operativo es-ES y las reglas de degradación temporal por obsolescencia.
+1. **[[MOSCOR/INDEX|MOSCOR]]**: MetsuOS Consolidated Core Architecture (`Fase COR`) - Sin descripción
+1. **[[MOSNATO/INDEX|MOSNATO]]**: MetsuOS NATO Integration & Doctrine Standard (`Fase COR`) - Sin descripción
 
 ---
 *Última compilación global realizada por el proyecto: `MOM`*

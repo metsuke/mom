@@ -18,8 +18,8 @@ El motor debe almacenar cada ítem en src//.json y verificar que todo ítem de f
 
 ```mermaid
 graph TD
-    SRD-CORE-001[SRD-CORE-001]
-    URD-CORE-001[URD-CORE-001] --> SRD-CORE-001
+    SRD-CORE-001["SRD-CORE-001"]
+    URD-CORE-001["URD-CORE-001"] --> SRD-CORE-001
 ```
 
 * **Proyecto Origen:** `MOM`

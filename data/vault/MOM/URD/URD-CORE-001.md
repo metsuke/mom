@@ -18,8 +18,8 @@ El sistema MOM debe permitir declarar especificaciones atómicas en formato JSON
 
 ```mermaid
 graph TD
-    URD-CORE-001[URD-CORE-001]
-    URD-CORE-001 --> SRD-CORE-001[SRD-CORE-001]
+    URD-CORE-001["URD-CORE-001"]
+    URD-CORE-001 --> SRD-CORE-001["SRD-CORE-001"]
 ```
 
 * **Proyecto Origen:** `MOM`

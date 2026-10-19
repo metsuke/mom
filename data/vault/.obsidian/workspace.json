@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "MOM/SRD.md",
+                "file": "MOSCON/SRD.md",
                 "mode": "source",
                 "source": false
               },
@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "MOM/SRD.md",
+                "file": "MOSCON/SRD.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "MOM/SRD.md",
+                "file": "MOSCON/SRD.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "MOM/SRD.md",
+                "file": "MOSCON/SRD.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,33 +190,36 @@
   },
   "active": "ef5cb67e619c5e7f",
   "lastOpenFiles": [
-    "MOSCON/SRD.md",
     "MOM/SRD/SRD-CORE-001.md",
-    "MOM/URD.md",
-    "MOM/COR.md",
-    "MOSCON/ADD.md",
-    "MOSCON/AGENTS.md",
-    "MOSCON/COR.md",
-    "MOSCON/DDD.md",
-    "MOSCON/COR/COR-MOSCON-001.md",
-    "MOSCON/COR/COR-MOSCON-002.md",
-    "MOSCON/INDEX.md",
-    "INDEX.md",
-    "MOM/AGENTS.md",
-    "MOM/COR/COR-MOSCON-006.md",
-    "MOM/COR/COR-MOSCON-005.md",
-    "MOM/COR/COR-MOSCON-004.md",
-    "MOM/COR/COR-MOSCON-003.md",
-    "MOM/COR/COR-MOSCON-002.md",
-    "MOM/COR/COR-MOSCON-001.md",
     "MOM/SRD",
     "MOM/SRD.md",
+    "MOM/AGENTS.md",
+    "MOM/COR.md",
+    "MOM/URD.md",
     "MOM/INDEX.md",
     "MOM/VISION.md",
     "MOM/ADD.md",
-    "MOM/URD/URD-CORE-001.md",
-    "MOM/URD",
+    "MOSCON/SRD.md",
+    "MOSCON/AGENTS.md",
+    "MOSCON/COR.md",
+    "MOSCON/URD.md",
+    "MOSCON/INDEX.md",
+    "MOSCON/VISION.md",
+    "MOSCON/ADD.md",
+    "MOSCON/COR/COR-MOSCON-002.md",
     "MOSCON/COR/COR-MOSCON-006.md",
-    "MOSCON/COR/COR-MOSCON-005.md"
+    "MOSCON/COR/COR-MOSCON-003.md",
+    "MOSCON/COR/COR-MOSCON-004.md",
+    "MOSCON/COR/COR-MOSCON-001.md",
+    "MOSCOR/SRD.md",
+    "MOSCOR/AGENTS.md",
+    "MOSCOR/COR.md",
+    "MOSCOR/URD.md",
+    "MOSCOR/INDEX.md",
+    "MOSCOR/VISION.md",
+    "MOSCOR/COR",
+    "MOSCOR",
+    "MOSNATO",
+    "MOM/URD"
   ]
 }

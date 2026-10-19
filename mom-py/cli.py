@@ -7,15 +7,13 @@ import datetime
 from pathlib import Path
 from typing import Optional, List, Dict
 
-# Garantiza que Python encuentre los módulos locales dentro de 'mom-py'
 current_dir = Path(__file__).resolve().parent
 if str(current_dir) not in sys.path:
     sys.path.insert(0, str(current_dir))
 
-# Importaciones locales directas
 from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from compiler import MOMCompiler
-from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, VerificationMethod, ItemAttributes, ItemMetadata
+from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, VerificationMethod, ItemAttributes, ItemMetadata, CURRENT_SCHEMA_VERSION
 
 def ask_confirmation(prompt: str, default: bool = False) -> bool:
     """Solicita confirmación explícita al usuario humano [s/N]."""
@@ -121,6 +119,53 @@ def get_next_auto_id(inherited_repo: MOMInheritedRepository, phase: ESAPhase, pr
 
     next_num = max(existing_numbers) + 1 if existing_numbers else 1
     return f"{prefix}-{next_num:03d}"
+
+def menu_configure_global_settings(data_dir: Path) -> None:
+    """Gestiona la configuración global de MOM almacenada en data/config.json."""
+    config_file = data_dir / "config.json"
+    config = {"web_vault_dir": None, "schema_version": CURRENT_SCHEMA_VERSION}
+    
+    if config_file.exists():
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+        except Exception:
+            pass
+
+    current_web = config.get("web_vault_dir")
+    web_str = current_web if current_web else "🚫 DESACTIVADA (Sin exportación web)"
+
+    print("\n=======================================================")
+    print(" ⚙️ CONFIGURACIÓN GLOBAL DEL FRAMEWORK MOM")
+    print("=======================================================")
+    print(f"  • Ruta Web Vault (flat directory): {web_str}")
+    print(f"  • Versión del Esquema Global:     v{config.get('schema_version', CURRENT_SCHEMA_VERSION)}")
+    print("-------------------------------------------------------")
+    print("  [1] Configurar/Modificar ruta de exportación Web Vault")
+    print("  [2] Desactivar exportación a Web Vault")
+    print("  [0] Volver al menú principal")
+    print("-------------------------------------------------------")
+
+    opt = input("Selecciona una opción [0-2]: ").strip()
+
+    if opt == "1":
+        new_path = input("\nIntroduce la ruta absoluta o relativa hacia la carpeta web (ej. ../23-MetsuOS-PublicBrain): ").strip()
+        if new_path:
+            p = Path(new_path).expanduser().resolve()
+            if not p.exists():
+                print(f"⚠️ La ruta '{p}' no existe en el disco actualmente.")
+                if not ask_confirmation("¿Deseas guardar la ruta de todos modos para cuando exista?"):
+                    return
+            config["web_vault_dir"] = str(p)
+            with open(config_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            print(f"✅ Ruta global de Web Vault configurada en: {p}")
+    elif opt == "2":
+        if ask_confirmation("¿Desactivar la exportación plana a Web Vault?"):
+            config["web_vault_dir"] = None
+            with open(config_file, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            print("✅ Exportación a Web Vault desactivada.")
 
 def menu_create_project(pm: ProjectManager) -> Optional[str]:
     print("\n--- 📁 CREAR NUEVO PROYECTO MOM (Esquema v0.5.2) ---")
@@ -572,8 +617,6 @@ def menu_compile_project(pm: ProjectManager, active_project: Optional[str] = Non
     print("✅ Grafo ESA/MOM 100% válido y verificado.")
     if repo.target_docs_dir:
         print(f"📦 Se exportará automáticamente una copia a: {repo.target_docs_dir}")
-    else:
-        print("ℹ️ Sin exportación externa configurada (solo compilación local).")
 
     if ask_confirmation(f"¿Proceder a compilar '{target_project}'?"):
         compiler.compile_all()
@@ -736,6 +779,7 @@ def select_active_project(pm: ProjectManager) -> Optional[str]:
 
 def interactive_main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
+    data_dir = current_dir.parent / "data"
     pm = ProjectManager(projects_root=projects_dir)
     
     active_project: Optional[str] = "MOSCON" if (projects_dir / "MOSCON").exists() else None
@@ -755,9 +799,10 @@ def interactive_main() -> None:
         print("  [7] Compilar proyecto activo (Generar doc. MD, Vault Obsidian y AGENTS.md)")
         print("  [8] Compilar TODOS los proyectos registrados")
         print("  [9] Revisar y aprobar/rechazar propuestas de IA (data/ai-proposals/)")
+        print("  [10] Configurar ajustes GLOBALES del framework (Ruta Web Vault)")
         print("  [0] Salir")
         print("-------------------------------------------------------")
-        choice = input("Selecciona una opción [0-9]: ").strip()
+        choice = input("Selecciona una opción [0-10]: ").strip()
 
         if choice == "1":
             selected = select_active_project(pm)
@@ -781,11 +826,13 @@ def interactive_main() -> None:
             menu_compile_all_projects(pm)
         elif choice == "9":
             menu_review_agent_proposal(pm, active_project=active_project)
+        elif choice == "10":
+            menu_configure_global_settings(data_dir)
         elif choice == "0":
             print("\n👋 Saliendo de MOM. ¡Soberanía y control garantizados!")
             break
         else:
-            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 9.")
+            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 10.")
 
 def main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
@@ -824,5 +871,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.2
-# File_Version: 0.5.2.3
+# File_Version: 0.5.2.4
 # Schema_Version: 0.5.2

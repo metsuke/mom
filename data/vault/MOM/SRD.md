@@ -36,8 +36,8 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 
 ```mermaid
 graph TD
-    SRD-CORE-001[SRD-CORE-001]
-    URD-CORE-001[URD-CORE-001] -.-> SRD-CORE-001
+    SRD-CORE-001["SRD-CORE-001"]
+    URD-CORE-001["URD-CORE-001"] -.-> SRD-CORE-001
 ```
 
 ---

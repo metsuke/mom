@@ -18,8 +18,8 @@ Establece el marco de descomposición de problemas ambiguos, desestructurados y 
 
 ```mermaid
 graph TD
-    COR-MOSCON-006[COR-MOSCON-006]
-    COR-MOSCON-005[COR-MOSCON-005] --> COR-MOSCON-006
+    COR-MOSCON-006["COR-MOSCON-006"]
+    COR-MOSCON-005["COR-MOSCON-005"] --> COR-MOSCON-006
 ```
 
 * **Proyecto Origen:** `MOSCON`

@@ -1,7 +1,9 @@
 {
   "schema_version": "0.5.2",
   "name": "MetsuOS Conocimiento - Núcleo y Norma Geopolítica",
-  "parents": [],
+  "parents": [
+    "MOSNATO"
+  ],
   "is_private": false,
   "mandatory": true,
   "description": "Proyecto raíz del Corpus de MOM. Define la física interna del dato, la norma geopolítica de lenguaje operativo es-ES y las reglas de degradación temporal por obsolescencia."

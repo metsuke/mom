@@ -13,7 +13,7 @@ MOM (MetsuOS Methodology) es una arquitectura y conjunto de herramientas CLI/Com
 * **🔄 Trazabilidad Bidireccional Automática:** El compilador calcula dinámicamente las relaciones de continuidad en todo el grafo; cada elemento padre identifica automáticamente a sus elementos hijos (`child_ids`).
 * **🌐 Vault Global Unificado (`data/vault/`):** Genera una bóveda Obsidian holística que sincroniza todos los proyectos públicos del sistema, incluyendo un `INDEX.md` con **diagramas de jerarquía visual en Mermaid** y leyendas navegables.
 * **🤖 Contextos inmutables para IA (`AGENTS.md`):** Extracción automática de *AI Guardrails* e instrucciones de seguridad obligatorias para alimentar agentes autónomos e LLMs.
-* **📌 Versionado Riguroso de 4 Dígitos:** Control estricto del versionado de ficheros (`Project.File.Schema.Revision`, ej. `0.5.2.4`) manteniendo intacta la versión global definida manualmente en `project.json` / `pyproject.toml`.
+* **📌 Versionado Riguroso de 4 Dígitos:** Control estricto del versionado de ficheros (`Project.File.Schema.Revision`, ej. `0.5.2.26`) manteniendo intacta la versión global definida manualmente en `project.json` / `pyproject.toml`.
 * **💻 Interfaz CLI Interactiva y Robusta:** Menú TUI en consola (`cli.py`) equipado con conmutadores (switches) de estado visible, autogeneración de IDs correlativos y paneles de auditoría de métricas.
 
 ---
@@ -25,20 +25,22 @@ MOM (MetsuOS Methodology) es una arquitectura y conjunto de herramientas CLI/Com
 ├── data/
 │   ├── projects/            # Proyectos registrados (project.json + specs/*.json)
 │   │   ├── MOM/             # Proyecto raíz Metodológico
-│   │   └── MOSCON/          # Proyecto derivado / específico
+│   │   ├── MOSCON/          # Pilar de Contexto y Conciencia de Dominio
+│   │   ├── MOSNATO/         # Pilar de Integración y Doctrina OTAN
+│   │   └── MOSCOR/          # Nodo de Consolidación Core Integrado
 │   ├── ai-proposals/        # Propuestas atómicas pendientes de revisión de IA (FIFO)
 │   └── vault/               # Vault Global Unificado de Obsidian (Generado)
 │       ├── INDEX.md         # Índice principal con Diagrama Mermaid y Leyenda
-│       ├── MOM/             # Réplica sincronizada del Vault de MOM
-│       └── MOSCON/          # Réplica sincronizada del Vault de MOSCON
+│       └── <PROYECTOS>/     # Réplicas sincronizadas de vaults por proyecto
 ├── mom-py/                  # Núcleo del motor y herramientas CLI (v0.5.2)
-│   ├── cli.py               # Menú interactivo y gestión de proyectos (v0.5.2.3)
-│   ├── compiler.py          # Compilador Markdown, Obsidian y AGENTS.md (v0.5.2.4)
+│   ├── cli.py               # Menú interactivo y gestión de proyectos
+│   ├── compiler.py          # Compilador Markdown, Obsidian, AGENTS.md y Web Vault
 │   ├── projects.py          # Gestor de herencia DAG y repositorio unificado
 │   └── schemas.py           # Modelos Pydantic / dataclasses (v0.5.2)
 ├── templates/               # Plantillas agnósticas globales de documentación
+│   └── README.md.template   # Plantilla base del repositorio
 ├── pyproject.toml           # Configuración y versión global del sistema (v0.5.2)
-└── README.md                # Documentación principal del sistema
+└── README.md                # Documentación principal autogenerada
 ```
 
 ---
@@ -56,7 +58,7 @@ python mom-py/cli.py
 ```text
 =======================================================
      MOM (MetsuOS Methodology) - MENÚ PRINCIPAL       
-    [PROYECTO ACTIVO: MOSCON]
+    [PROYECTO ACTIVO: MOSCOR]
 =======================================================
   [1] Seleccionar / Cambiar proyecto activo
   [2] Crear un nuevo proyecto
@@ -73,20 +75,25 @@ python mom-py/cli.py
 
 ---
 
-## ⚙️ Compilación e Sincronización con Obsidian
+## ⚙️ Compilación y Sincronización con Obsidian
 
 Al ejecutar la compilación (Opción `[7]` para el proyecto activo o `[8]` para compilación masiva):
 
 1. **Validación del Grafo:** Se verifica la integridad de las referencias de herencia entre elementos atómicos.
 2. **Cálculo de Trazabilidad Bidireccional:** Se resuelven los enlaces inversos (`child_ids`) en cada nota.
 3. **Generación de Entregables Locales:** Se crean los documentos Markdown consolidados (`COR.md`, `URD.md`, etc.) en `doc/`, el contexto para agentes `AGENTS.md` y la bóveda local `vault/`.
-4. **Sincronización Vault Global (`data/vault/`):** Se actualiza la réplica del proyecto en la bóveda global y se reconstruye `data/vault/INDEX.md` renderizando el árbol gráfico Mermaid:
+4. **Sincronización Vault Global (`data/vault/`) y Web:** Se actualiza la réplica del proyecto en la bóveda global y se exportan los documentos `MOSDOC-` planos para la web con metadatos estructurados.
+5. **Inyección Automática del Grafo de Proyectos:** Se reconstruye dinámicamente este `README.md` inyectando el diagrama visual Mermaid actualizado:
 
 ```mermaid
 graph TD
-    MOM[MOM]
-    MOSCON[MOSCON]
-    MOM --> MOSCON
+    MOM["MetsuOS Methodology Framework (MOM)"]
+    MOSCON["MetsuOS Conocimiento - Núcleo y Norma Geopolítica (MOSCON)"]
+    MOSCOR["MetsuOS Consolidated Core Architecture (MOSCOR)"]
+    MOSNATO["MetsuOS NATO Integration & Doctrine Standard (MOSNATO)"]
+    MOSCOR --> MOM
+    MOSNATO --> MOSCON
+    MOSCON --> MOSCOR
 ```
 
 ---

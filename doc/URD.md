@@ -45,7 +45,7 @@ Condicionantes de entorno, normativas legales, interoperabilidad o presupuestari
 
 ```mermaid
 graph TD
-    URD-CORE-001[URD-CORE-001]
+    URD-CORE-001["URD-CORE-001"]
 ```
 
 ---

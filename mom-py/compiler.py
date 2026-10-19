@@ -8,7 +8,7 @@ from projects import MOMInheritedRepository
 from schemas import ESAPhase, MOMItem, MetsuOSKnowledgeLevel, CURRENT_SCHEMA_VERSION
 
 class MOMCompiler:
-    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local, Vault Global e Integración Web con prefijo MOSDOC- y Frontmatter estricto."""
+    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local, Vault Global e Integración Web con prefijo MOSDOC- y generación de README raíz mediante plantilla."""
     def __init__(self, repo: MOMInheritedRepository, target_docs_dir: Optional[Path] = None) -> None:
         self.repo = repo
         self.project_dir = repo.project_dir
@@ -17,8 +17,9 @@ class MOMCompiler:
         self.agents_out = self.project_dir / "AGENTS.md"
         self.target_docs_dir = target_docs_dir or repo.target_docs_dir
         
-        # Directorio de datos raíz y Vault global unificado en data/vault/
+        # Raíz principal del repositorio MOM y directorio de proyectos
         self.data_dir = self.project_dir.parent.parent
+        self.root_dir = self.data_dir.parent if self.data_dir.name == "data" else self.data_dir
         self.global_vault_dir = self.data_dir / "vault"
         self.projects_dir = self.data_dir / "projects"
         
@@ -84,13 +85,13 @@ class MOMCompiler:
     def _build_item_mermaid_local(self, item: MOMItem) -> str:
         """Genera un diagrama Mermaid local centrado en el elemento, mostrando sus padres e hijos inmediatos."""
         lines = ["```mermaid", "graph TD"]
-        lines.append(f"    {item.id}[{item.id}]")
+        lines.append(f'    {item.id}["{item.id}"]')
 
         for pid in item.parent_ids:
-            lines.append(f"    {pid}[{pid}] --> {item.id}")
+            lines.append(f'    {pid}["{pid}"] --> {item.id}')
 
         for cid in item.child_ids:
-            lines.append(f"    {item.id} --> {cid}[{cid}]")
+            lines.append(f'    {item.id} --> {cid}["{cid}"]')
 
         lines.append("```")
         return "\n".join(lines)
@@ -104,14 +105,14 @@ class MOMCompiler:
         lines = ["```mermaid", "graph TD"]
 
         for item in phase_items:
-            lines.append(f"    {item.id}[{item.id}]")
+            lines.append(f'    {item.id}["{item.id}"]')
 
         for item in phase_items:
             for pid in item.parent_ids:
                 if pid in phase_item_ids:
                     lines.append(f"    {pid} --> {item.id}")
                 else:
-                    lines.append(f"    {pid}[{pid}] -.-> {item.id}")
+                    lines.append(f'    {pid}["{pid}"] -.-> {item.id}')
 
         lines.append("```")
         return "\n".join(lines)
@@ -247,7 +248,7 @@ schema_version: "{item.schema_version}"
         self._sync_to_global_vault()
 
     def _sync_to_global_vault(self) -> None:
-        """Sincroniza el Vault del proyecto actual en data/vault/<PROJECT_ID>/ y regenera el INDEX.md Global."""
+        """Sincroniza el Vault del proyecto actual en data/vault/<PROJECT_ID>/ y regenera el INDEX.md Global y README.md raíz."""
         self.global_vault_dir.mkdir(parents=True, exist_ok=True)
         
         target_proj_vault = self.global_vault_dir / self.repo.project_name
@@ -256,14 +257,14 @@ schema_version: "{item.schema_version}"
         
         shutil.copytree(self.vault_out, target_proj_vault)
         self._generate_global_vault_index()
+        self._update_root_readme_graph()
 
         # Exportar el Vault Global completo a la carpeta plana web si está configurada
         self._export_to_flat_web_vault()
 
-    def _generate_global_vault_index(self) -> None:
-        """Genera el INDEX.md raíz de data/vault/ con grafo Mermaid y leyenda ordenada alfabéticamente."""
+    def _get_public_projects_dag(self) -> Dict[str, dict]:
+        """Obtiene de forma dinámica el diccionario de proyectos públicos para construir el grafo."""
         public_projects: Dict[str, dict] = {}
-
         if self.projects_dir.exists():
             for p in self.projects_dir.iterdir():
                 p_json = p / "project.json"
@@ -281,17 +282,26 @@ schema_version: "{item.schema_version}"
                             }
                     except Exception:
                         pass
+        return public_projects
 
+    def _build_global_mermaid_str(self, public_projects: Dict[str, dict]) -> str:
+        """Construye las líneas del diagrama Mermaid para la jerarquía de proyectos escapando nombres."""
         mermaid_lines: List[str] = ["graph TD"]
         for pid in sorted(public_projects.keys()):
-            mermaid_lines.append(f"    {pid}[{pid}]")
+            data = public_projects[pid]
+            mermaid_lines.append(f'    {pid}["{data["name"]} ({pid})"]')
 
         for pid, data in sorted(public_projects.items()):
             for parent_id in data["parents"]:
                 if parent_id in public_projects:
                     mermaid_lines.append(f"    {parent_id} --> {pid}")
 
-        mermaid_str = "\n".join(mermaid_lines)
+        return "\n".join(mermaid_lines)
+
+    def _generate_global_vault_index(self) -> None:
+        """Genera el INDEX.md raíz de data/vault/ con grafo Mermaid y leyenda ordenada alfabéticamente."""
+        public_projects = self._get_public_projects_dag()
+        mermaid_str = self._build_global_mermaid_str(public_projects)
 
         legend_lines: List[str] = []
         for pid in sorted(public_projects.keys()):
@@ -326,6 +336,31 @@ schema_version: "{item.schema_version}"
         with open(self.global_vault_dir / "INDEX.md", "w", encoding="utf-8") as f:
             f.write(global_index_content)
 
+    def _update_root_readme_graph(self) -> None:
+        """Genera el README.md principal en la raíz real del repositorio MOM leyendo README.md.template e inyectando el grafo Mermaid."""
+        readme_path = self.root_dir / "README.md"
+        public_projects = self._get_public_projects_dag()
+        mermaid_str = self._build_global_mermaid_str(public_projects)
+
+        readme_template = self._get_template_content("README.md.template")
+        if not readme_template:
+            readme_template = "# 🌐 MOM — MetsuOS Methodology Framework\n\n## 🌳 Jerarquía de Proyectos MetsuOS\n\n```mermaid\n{{MOM_PROJECTS_GRAPH}}\n```\n"
+
+        readme_rendered = readme_template.replace("{{MOM_PROJECTS_GRAPH}}", mermaid_str)
+
+        with open(readme_path, "w", encoding="utf-8") as f:
+            f.write(readme_rendered)
+        
+        # Eliminar el README.md residual dentro de data/ si existiera por la versión previa
+        residual_data_readme = self.data_dir / "README.md"
+        if residual_data_readme.exists() and residual_data_readme.resolve() != readme_path.resolve():
+            try:
+                residual_data_readme.unlink()
+            except Exception:
+                pass
+
+        print(f"✅ [README] Generado e inyectado grafo dinámico en la raíz del proyecto: {readme_path}")
+
     def _export_to_flat_web_vault(self) -> None:
         """Exporta TODO el Vault Global a la carpeta web con el esquema estricto de Frontmatter del documento original."""
         raw_web_dir = self.global_config.get("web_vault_dir")
@@ -356,7 +391,7 @@ schema_version: "{item.schema_version}"
 
             return f"""---
 iaStatus: 8
-iaStatus_Model: "MOM 0.5.2.23 MetsuOS Methodology Framework"
+iaStatus_Model: "MOM 0.5.2.27 MetsuOS Methodology Framework"
 iaStatus_Generado: "I"
 iaStatus_Supervisado: "H"
 iaStatus_Validado: "-"
@@ -370,7 +405,7 @@ supervisado: ""
 ACCION: ""
 ver_major: 0
 ver_minor: 5
-ver_rev: 23
+ver_rev: 27
 nav_primary: 
 nav_secondary: {tags_block}
 ---"""
@@ -683,5 +718,5 @@ nav_secondary: {tags_block}
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
 # Version: 0.5.2
-# File_Version: 0.5.2.23
+# File_Version: 0.5.2.27
 # Schema_Version: 0.5.2

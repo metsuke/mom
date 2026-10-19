@@ -1,7 +1,7 @@
 # ÍNDICE GENERAL Y NAVEGACIÓN DE VAULT (OBSIDIAN)
 
 * **Proyecto:** MOM
-* **Cadena de Herencia DAG:** `MOSCON -> MOM`
+* **Cadena de Herencia DAG:** `MOSNATO -> MOSCON -> MOSCOR -> MOM`
 
 ---
 

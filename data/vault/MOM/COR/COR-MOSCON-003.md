@@ -18,9 +18,9 @@ Establece el protocolo de validación bibliográfica y mapeo cruzado de fuentes.
 
 ```mermaid
 graph TD
-    COR-MOSCON-003[COR-MOSCON-003]
-    COR-MOSCON-002[COR-MOSCON-002] --> COR-MOSCON-003
-    COR-MOSCON-003 --> COR-MOSCON-004[COR-MOSCON-004]
+    COR-MOSCON-003["COR-MOSCON-003"]
+    COR-MOSCON-002["COR-MOSCON-002"] --> COR-MOSCON-003
+    COR-MOSCON-003 --> COR-MOSCON-004["COR-MOSCON-004"]
 ```
 
 * **Proyecto Origen:** `MOSCON`

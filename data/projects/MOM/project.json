@@ -2,7 +2,7 @@
   "schema_version": "0.5.2",
   "name": "MetsuOS Methodology Framework",
   "parents": [
-    "MOSCON"
+    "MOSCOR"
   ],
   "is_private": false,
   "mandatory": true,
