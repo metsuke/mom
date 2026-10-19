@@ -17,7 +17,7 @@ Establece el español de España (es-ES) como lenguaje vehicular obligatorio e i
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     COR-MOSCON-001["COR-MOSCON-001"]
     COR-MOSCON-001 --> COR-MOSCON-002["COR-MOSCON-002"]
 ```

@@ -17,7 +17,7 @@ Define la física interna del dato basada en la escala cromática de 6 niveles (
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     COR-MOSCON-002["COR-MOSCON-002"]
     COR-MOSCON-001["COR-MOSCON-001"] --> COR-MOSCON-002
     COR-MOSCON-002 --> COR-MOSCON-003["COR-MOSCON-003"]

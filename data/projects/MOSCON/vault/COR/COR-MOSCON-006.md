@@ -17,7 +17,7 @@ Establece el marco de descomposición de problemas ambiguos, desestructurados y 
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     COR-MOSCON-006["COR-MOSCON-006"]
     COR-MOSCON-005["COR-MOSCON-005"] --> COR-MOSCON-006
 ```

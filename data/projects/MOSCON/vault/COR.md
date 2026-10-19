@@ -26,7 +26,7 @@ Las especificaciones atómicas contenidas en este documento no constituyen funci
 ## 📊 Grafo de Trazabilidad de la Fase
 
 ```mermaid
-graph TD
+graph LR
     COR-MOSCON-001["COR-MOSCON-001"]
     COR-MOSCON-002["COR-MOSCON-002"]
     COR-MOSCON-003["COR-MOSCON-003"]

@@ -1,7 +1,7 @@
 # ÍNDICE GENERAL Y NAVEGACIÓN DE VAULT (OBSIDIAN)
 
 * **Proyecto:** MOSCOR
-* **Cadena de Herencia DAG:** `MOSNATO -> MOSCON -> MOSCOR`
+* **Cadena de Herencia DAG:** `MOSPSH -> MOSNATO -> MOSCPS -> MOSCON -> MOSA11Y -> MOSESA -> MOSSTD -> MOSCOR`
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "schema_version": "0.5.2",
+  "name": "MetsuOS Consolidated Standards",
+  "parents": [
+    "MOSA11Y",
+    "MOSESA"
+  ],
+  "is_private": false,
+  "mandatory": true
+}

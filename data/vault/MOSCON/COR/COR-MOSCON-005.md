@@ -17,7 +17,7 @@ Asigna un valor numérico continuo de certidumbre en un rango asintótico de -99
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     COR-MOSCON-005["COR-MOSCON-005"]
     COR-MOSCON-004["COR-MOSCON-004"] --> COR-MOSCON-005
     COR-MOSCON-005 --> COR-MOSCON-006["COR-MOSCON-006"]

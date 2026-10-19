@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "MOSCON/SRD.md",
+                "file": "INDEX.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "SRD"
+              "title": "INDEX"
             }
           }
         ]
@@ -199,27 +199,32 @@
     "MOM/INDEX.md",
     "MOM/VISION.md",
     "MOM/ADD.md",
+    "MOM/URD/URD-CORE-001.md",
+    "MOM/URD",
+    "MOSCOR/SRD.md",
+    "MOSCOR/AGENTS.md",
+    "MOSCPS/SRD.md",
+    "MOSCPS/AGENTS.md",
+    "MOSCPS/COR.md",
     "MOSCON/SRD.md",
     "MOSCON/AGENTS.md",
     "MOSCON/COR.md",
     "MOSCON/URD.md",
-    "MOSCON/INDEX.md",
-    "MOSCON/VISION.md",
-    "MOSCON/ADD.md",
-    "MOSCON/COR/COR-MOSCON-002.md",
-    "MOSCON/COR/COR-MOSCON-006.md",
-    "MOSCON/COR/COR-MOSCON-003.md",
-    "MOSCON/COR/COR-MOSCON-004.md",
-    "MOSCON/COR/COR-MOSCON-001.md",
-    "MOSCOR/SRD.md",
-    "MOSCOR/AGENTS.md",
-    "MOSCOR/COR.md",
-    "MOSCOR/URD.md",
-    "MOSCOR/INDEX.md",
-    "MOSCOR/VISION.md",
+    "MOSPSH/VISION.md",
+    "MOSPSH/URD.md",
+    "MOSPSH/SRD.md",
+    "MOSPSH/INDEX.md",
+    "MOSPSH/DDD.md",
+    "MOSPSH/COR.md",
+    "MOSPSH/AGENTS.md",
+    "MOSPSH/ADD.md",
+    "MOSPSH",
+    "MOSCPS",
+    "MOSSTD",
+    "MOSESA",
+    "MOSA11Y",
     "MOSCOR/COR",
     "MOSCOR",
-    "MOSNATO",
-    "MOM/URD"
+    "MOSNATO"
   ]
 }

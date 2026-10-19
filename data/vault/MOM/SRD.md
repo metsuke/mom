@@ -35,7 +35,7 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 ## 📊 Grafo de Trazabilidad de la Fase
 
 ```mermaid
-graph TD
+graph LR
     SRD-CORE-001["SRD-CORE-001"]
     URD-CORE-001["URD-CORE-001"] -.-> SRD-CORE-001
 ```

@@ -44,7 +44,7 @@ Condicionantes de entorno, normativas legales, interoperabilidad o presupuestari
 ## 📊 Grafo de Trazabilidad de la Fase
 
 ```mermaid
-graph TD
+graph LR
     URD-CORE-001["URD-CORE-001"]
 ```
 

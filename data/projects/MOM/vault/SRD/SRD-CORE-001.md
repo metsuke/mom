@@ -17,7 +17,7 @@ El motor debe almacenar cada ítem en src//.json y verificar que todo ítem de f
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     SRD-CORE-001["SRD-CORE-001"]
     URD-CORE-001["URD-CORE-001"] --> SRD-CORE-001
 ```

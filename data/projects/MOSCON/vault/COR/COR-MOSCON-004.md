@@ -17,7 +17,7 @@ Adapta el estándar OTAN STANAG 2010 / AJP-2.1 para la evaluación del conocimie
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     COR-MOSCON-004["COR-MOSCON-004"]
     COR-MOSCON-003["COR-MOSCON-003"] --> COR-MOSCON-004
     COR-MOSCON-004 --> COR-MOSCON-005["COR-MOSCON-005"]

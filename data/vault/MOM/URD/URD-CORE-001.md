@@ -17,7 +17,7 @@ El sistema MOM debe permitir declarar especificaciones atómicas en formato JSON
 ## Trazabilidad y Relaciones
 
 ```mermaid
-graph TD
+graph LR
     URD-CORE-001["URD-CORE-001"]
     URD-CORE-001 --> SRD-CORE-001["SRD-CORE-001"]
 ```

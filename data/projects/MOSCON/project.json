@@ -2,7 +2,9 @@
   "schema_version": "0.5.2",
   "name": "MetsuOS Conocimiento - Núcleo y Norma Geopolítica",
   "parents": [
-    "MOSNATO"
+    "MOSPSH",
+    "MOSNATO",
+    "MOSCPS"
   ],
   "is_private": false,
   "mandatory": true,

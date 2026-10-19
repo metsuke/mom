@@ -86,14 +86,33 @@ Al ejecutar la compilación (Opción `[7]` para el proyecto activo o `[8]` para 
 5. **Inyección Automática del Grafo de Proyectos:** Se reconstruye dinámicamente este `README.md` inyectando el diagrama visual Mermaid actualizado:
 
 ```mermaid
-graph TD
-    MOM["MetsuOS Methodology Framework (MOM)"]
-    MOSCON["MetsuOS Conocimiento - Núcleo y Norma Geopolítica (MOSCON)"]
-    MOSCOR["MetsuOS Consolidated Core Architecture (MOSCOR)"]
-    MOSNATO["MetsuOS NATO Integration & Doctrine Standard (MOSNATO)"]
+graph LR
+    subgraph Capa_Origen [Pilares de Origen y Estándares]
+        MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
+        MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
+        MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
+        MOSNATO["MOSNATO<br/>MetsuOS NATO Integration & Doctrine Standard"]
+        MOSPSH["MOSPSH<br/>MetsuOS Psychohistory & Strategic Modeling"]
+    end
+
+    subgraph Capa_Intermedia [Consolidación Estándar y Contexto]
+        MOSCON["MOSCON<br/>MetsuOS Conocimiento - Núcleo y Norma Geopolítica"]
+        MOSSTD["MOSSTD<br/>MetsuOS Consolidated Standards"]
+    end
+
+    subgraph Capa_Core [Consolidación Core y Metodología Terminal]
+        MOSCOR["MOSCOR<br/>MetsuOS Consolidated Core Architecture"]
+        MOM["MOM<br/>MetsuOS Methodology Framework"]
+    end
+
     MOSCOR --> MOM
+    MOSPSH --> MOSCON
     MOSNATO --> MOSCON
+    MOSCPS --> MOSCON
     MOSCON --> MOSCOR
+    MOSSTD --> MOSCOR
+    MOSA11Y --> MOSSTD
+    MOSESA --> MOSSTD
 ```
 
 ---
