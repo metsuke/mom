@@ -1,9 +1,7 @@
 {
-  "project_id": "MOSAUDIT",
+  "schema_version": "0.5.3",
   "name": "MetsuOS Code Audit, Reverse Engineering & Security Integrity Standard",
-  "phase": "COR",
   "parents": [],
   "is_private": false,
-  "is_mandatory": false,
-  "description": "Pilar de auditoría de software, despiece comparativo de código abierto vs. binarios decompilados y detección de discrepancias/troyanos."
+  "mandatory": true
 }
