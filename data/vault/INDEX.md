@@ -10,6 +10,7 @@
 graph LR
     subgraph Capa_Origen [Pilares de Origen y Estándares]
         MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
+        MOSAUTHOR["MOSAUTHOR<br/>MetsuOS Global Author & Bibliographic Corpus Standard"]
         MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
         MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
         MOSNATO["MOSNATO<br/>MetsuOS NATO Integration & Doctrine Standard"]
@@ -42,6 +43,7 @@ graph LR
 
 1. **[[MOM/INDEX|MOM]]**: MetsuOS Methodology Framework (`Fase COR`) - Metodología atómica y framework de trazabilidad para el desarrollo soberano de software, especificaciones ESA PSS-05 e integración de agentes de IA.
 1. **[[MOSA11Y/INDEX|MOSA11Y]]**: MetsuOS Accessibility, Usability & Inclusion Standard (`Fase COR`) - Sin descripción
+1. **[[MOSAUTHOR/INDEX|MOSAUTHOR]]**: MetsuOS Global Author & Bibliographic Corpus Standard (`Fase COR`) - Sin descripción
 1. **[[MOSCON/INDEX|MOSCON]]**: MetsuOS Conocimiento - Núcleo y Norma Geopolítica (`Fase COR`) - Proyecto raíz del Corpus de MOM. Define la física interna del dato, la norma geopolítica de lenguaje operativo es-ES y las reglas de degradación temporal por obsolescencia.
 1. **[[MOSCOR/INDEX|MOSCOR]]**: MetsuOS Consolidated Core Architecture (`Fase COR`) - Sin descripción
 1. **[[MOSCPS/INDEX|MOSCPS]]**: MetsuOS Complex Problem Solving Standard (`Fase COR`) - Sin descripción

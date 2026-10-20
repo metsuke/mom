@@ -89,6 +89,7 @@ Al ejecutar la compilación (Opción `[7]` para el proyecto activo o `[8]` para 
 graph LR
     subgraph Capa_Origen [Pilares de Origen y Estándares]
         MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
+        MOSAUTHOR["MOSAUTHOR<br/>MetsuOS Global Author & Bibliographic Corpus Standard"]
         MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
         MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
         MOSNATO["MOSNATO<br/>MetsuOS NATO Integration & Doctrine Standard"]

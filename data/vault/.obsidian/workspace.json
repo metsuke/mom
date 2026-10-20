@@ -190,6 +190,15 @@
   },
   "active": "ef5cb67e619c5e7f",
   "lastOpenFiles": [
+    "MOSAUTHOR/SRD.md",
+    "MOSAUTHOR/AGENTS.md",
+    "MOSAUTHOR/COR.md",
+    "MOSAUTHOR/URD.md",
+    "MOSAUTHOR/INDEX.md",
+    "MOSAUTHOR/VISION.md",
+    "MOSAUTHOR/DDD.md",
+    "MOSAUTHOR/ADD.md",
+    "MOSAUTHOR",
     "MOSNATO/INDEX.md",
     "MOSNATO/VISION.md",
     "MOSNATO/ADD.md",
@@ -210,21 +219,12 @@
     "MOSCPS/SRD.md",
     "MOSCPS/AGENTS.md",
     "MOSCPS/COR.md",
-    "MOSCON/SRD.md",
-    "MOSCON/AGENTS.md",
-    "MOSCON/COR.md",
-    "MOSCON/URD.md",
-    "MOSPSH/VISION.md",
-    "MOSPSH/URD.md",
-    "MOSPSH/SRD.md",
-    "MOSPSH/INDEX.md",
     "MOSPSH",
     "MOSCPS",
     "MOSSTD",
     "MOSESA",
     "MOSA11Y",
     "MOSCOR/COR",
-    "MOSCOR",
-    "MOSNATO"
+    "MOSCOR"
   ]
 }
