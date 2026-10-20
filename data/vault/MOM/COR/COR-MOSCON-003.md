@@ -6,7 +6,7 @@ status: "DRAFT"
 priority: "HIGH"
 author: "Metsuke"
 declared_in: "MOSCON"
-schema_version: "0.5.2"
+schema_version: "0.5.3"
 ---
 
 # COR-MOSCON-003: Auditoría de Fuentes, Red Bibliográfica (AUTHOR) y Principio del Eslabón Más Débil

@@ -1,5 +1,5 @@
 # AGENTS.md - Contexto de Onboarding e Instrucciones para IA
-**Proyecto:** MetsuOS Consolidated Core Architecture | **Esquema:** v0.5.2
+**Proyecto:** MetsuOS Consolidated Core Architecture | **Esquema:** v0.5.3
 
 ### Componente `COR-MOSCON-004` (Matriz de Inteligencia Militarsanitaria (MOSNATO) y Bloqueo del Techo de Certeza) - Origen: `MOSCON`
 > 🛑 **Guardrail Inmutable:** Queda prohibido utilizar la reputación, consenso o prestigio de una fuente para clasificar una información en el nivel Blue5 o Light6. Toda clasificación basada exclusivamente en evaluaciones OTAN o de inteligencia quedará topada en Green4.

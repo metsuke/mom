@@ -6,7 +6,7 @@ status: "DRAFT"
 priority: "HIGH"
 author: "Metsuke"
 declared_in: "MOSCON"
-schema_version: "0.5.2"
+schema_version: "0.5.3"
 ---
 
 # COR-MOSCON-006: Resolución de Problemas Complejos (MOSCPS) y Reglas de Combate Atómicas

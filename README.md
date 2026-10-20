@@ -88,15 +88,18 @@ Al ejecutar la compilación (Opción `[7]` para el proyecto activo o `[8]` para 
 ```mermaid
 graph LR
     subgraph Capa_Origen [Pilares de Origen y Estándares]
-        MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
-        MOSAUTHOR["MOSAUTHOR<br/>MetsuOS Global Author & Bibliographic Corpus Standard"]
+        AUTHOR-W3C["AUTHOR-W3C<br/>World Wide Web Consortium"]
+        MOSAUDIT["MOSAUDIT<br/>MetsuOS Code Audit, Reverse Engineering & Security Integrity Standard"]
         MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
         MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
         MOSNATO["MOSNATO<br/>MetsuOS NATO Integration & Doctrine Standard"]
+        MOSPAT["MOSPAT<br/>MetsuOS Patent & Intellectual Property Compliance Standard"]
         MOSPSH["MOSPSH<br/>MetsuOS Psychohistory & Strategic Modeling"]
     end
 
     subgraph Capa_Intermedia [Consolidación Estándar y Contexto]
+        MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
+        MOSAUTHOR["MOSAUTHOR<br/>MetsuOS Global Author & Bibliographic Corpus Standard"]
         MOSCON["MOSCON<br/>MetsuOS Conocimiento - Núcleo y Norma Geopolítica"]
         MOSSTD["MOSSTD<br/>MetsuOS Consolidated Standards"]
     end
@@ -107,6 +110,8 @@ graph LR
     end
 
     MOSCOR --> MOM
+    AUTHOR-W3C --> MOSA11Y
+    AUTHOR-W3C --> MOSAUTHOR
     MOSPSH --> MOSCON
     MOSNATO --> MOSCON
     MOSCPS --> MOSCON

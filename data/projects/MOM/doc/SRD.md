@@ -36,9 +36,25 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 
 ```mermaid
 graph LR
+    SRD-AUTHOR-W3C-001["SRD-AUTHOR-W3C-001"]
     SRD-CORE-001["SRD-CORE-001"]
+    URD-AUTHOR-W3C-001["URD-AUTHOR-W3C-001"] -.-> SRD-AUTHOR-W3C-001
     URD-CORE-001["URD-CORE-001"] -.-> SRD-CORE-001
 ```
+
+---
+
+### SRD-AUTHOR-W3C-001: Pauta 1.1: Alternativas de texto
+**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `AUTHOR-W3C`
+
+
+#### Descripción
+Proporcionar alternativas de texto para cualquier contenido no textual.
+
+**Padres:** [[URD-AUTHOR-W3C-001]]
+**Hijos:** [[ADD-AUTHOR-W3C-001]]
+**Apoya a:** [[S]]
+**Refuta a:** [[S]]
 
 ---
 

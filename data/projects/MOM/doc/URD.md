@@ -45,8 +45,21 @@ Condicionantes de entorno, normativas legales, interoperabilidad o presupuestari
 
 ```mermaid
 graph LR
+    URD-AUTHOR-W3C-001["URD-AUTHOR-W3C-001"]
     URD-CORE-001["URD-CORE-001"]
 ```
+
+---
+
+### URD-AUTHOR-W3C-001: Principio 1: Perceptible
+**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `AUTHOR-W3C`
+
+
+#### Descripción
+La información y los componentes de la interfaz de usuario deben ser presentables a los usuarios en formas que puedan percibir.
+
+**Hijos:** [[SRD-AUTHOR-W3C-001]]
+**Refuta a:** [[S]]
 
 ---
 

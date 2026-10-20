@@ -6,7 +6,7 @@ status: "DRAFT"
 priority: "HIGH"
 author: "Metsuke"
 declared_in: "MOSCON"
-schema_version: "0.5.2"
+schema_version: "0.5.3"
 ---
 
 # COR-MOSCON-001: Norma Geopolítica de Idioma Operativo y Salvaguarda de Control Humano

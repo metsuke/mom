@@ -1,7 +1,7 @@
 # ÍNDICE GENERAL Y NAVEGACIÓN DE VAULT (OBSIDIAN)
 
 * **Proyecto:** MOSA11Y
-* **Cadena de Herencia DAG:** `MOSA11Y`
+* **Cadena de Herencia DAG:** `AUTHOR-W3C -> MOSA11Y`
 
 ---
 

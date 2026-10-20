@@ -1,7 +1,7 @@
 # ÍNDICE GENERAL Y NAVEGACIÓN DE VAULT (OBSIDIAN)
 
 * **Proyecto:** MOSAUTHOR
-* **Cadena de Herencia DAG:** `MOSAUTHOR`
+* **Cadena de Herencia DAG:** `AUTHOR-W3C -> MOSAUTHOR`
 
 ---
 

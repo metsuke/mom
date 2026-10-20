@@ -1,7 +1,9 @@
 {
   "schema_version": "0.5.3",
   "name": "MetsuOS Accessibility, Usability & Inclusion Standard",
-  "parents": [],
+  "parents": [
+    "AUTHOR-W3C"
+  ],
   "is_private": false,
   "mandatory": true
 }

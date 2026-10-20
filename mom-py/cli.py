@@ -42,13 +42,16 @@ def _curses_multi_select(stdscr, title_header: str, options: List[str], preselec
         stdscr.addstr(1, 0, "Usa [Flecha Arriba/Abajo] para moverte, [Espacio] para marcar/desmarcar, [Enter] para guardar.")
         stdscr.addstr(2, 0, "--------------------------------------------------------------------------------")
 
-        for idx, option in enumerate(options):
+        max_y, max_x = stdscr.getmaxyx()
+        visible_rows = max_y - 5
+
+        for idx, option in enumerate(options[:visible_rows]):
             y = idx + 4
             prefix = "[X] " if selected[idx] else "[ ] "
             if idx == current_idx:
-                stdscr.addstr(y, 2, f"> {prefix}{option}", curses.A_REVERSE)
+                stdscr.addstr(y, 2, f"> {prefix}{option}"[:max_x-3], curses.A_REVERSE)
             else:
-                stdscr.addstr(y, 2, f"  {prefix}{option}")
+                stdscr.addstr(y, 2, f"  {prefix}{option}"[:max_x-3])
 
         stdscr.refresh()
         key = stdscr.getch()
@@ -65,16 +68,29 @@ def _curses_multi_select(stdscr, title_header: str, options: List[str], preselec
     return [options[i].split(" | ")[0] for i, is_sel in enumerate(selected) if is_sel]
 
 def select_parent_projects_interactively(pm: ProjectManager, exclude_project: Optional[str] = None, preselected: Optional[List[str]] = None) -> List[str]:
-    available = [
+    """Obtiene proyectos clasificados por categoría (Core, Obras/Autores, Patentes, Auditorías)."""
+    available_dirs = [
         p.name for p in pm.projects_root.iterdir() 
         if p.is_dir() and (p / "project.json").exists() and p.name != exclude_project
     ]
-    if not available:
+    if not available_dirs:
         print("ℹ️ No hay otros proyectos disponibles de los que heredar.")
         return []
 
+    categorized = []
+    for proj_id in sorted(available_dirs):
+        if proj_id.startswith("AUTHOR-"):
+            cat = "[📚 OBRA / AUTOR]"
+        elif proj_id.startswith("PATENT-") or proj_id == "MOSPAT":
+            cat = "[⚖️ PATENTE]"
+        elif proj_id.startswith("AUDIT-") or proj_id == "MOSAUDIT":
+            cat = "[🛡️ AUDITORÍA]"
+        else:
+            cat = "[🏛️ CORE MOM]"
+        categorized.append(f"{proj_id} | {cat}")
+
     try:
-        return curses.wrapper(_curses_multi_select, "SELECCIÓN DE HERENCIA DE PROYECTOS", available, preselected or [])
+        return curses.wrapper(_curses_multi_select, "SELECCIÓN DE HERENCIA DE PROYECTOS CATEGORIZADA", categorized, preselected or [])
     except Exception as e:
         print(f"⚠️ No se pudo cargar la interfaz TUI ({e}).")
         return []
@@ -83,10 +99,10 @@ def select_parent_items_interactively(inherited_repo: MOMInheritedRepository, cu
     """Muestra un menú TUI navegable con ID y Título para seleccionar los parent_ids de un ítem atómico."""
     all_items = inherited_repo.list_all_consolidated()
     
-    valid_parents = [
-        f"{item.id} | [{item.phase.value.upper()}] {item.title}"
-        for item in all_items.values()
-    ]
+    valid_parents = []
+    for item in all_items.values():
+        origin_proj = item.metadata.declared_in_project or "DESCONOCIDO"
+        valid_parents.append(f"{item.id} | [{item.phase.value.upper()}] ({origin_proj}) {item.title}")
 
     if not valid_parents:
         print("ℹ️ No hay elementos padres disponibles en el repositorio.")
@@ -133,16 +149,49 @@ def _calculate_sha256(file_path: Path) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+def _ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
+    """Crea o actualiza un nodo de proyecto en el disco manteniendo su estructura JSON."""
+    proj_dir = pm.projects_root / proj_id
+    proj_dir.mkdir(parents=True, exist_ok=True)
+    (proj_dir / "specs").mkdir(exist_ok=True)
+
+    json_path = proj_dir / "project.json"
+    if json_path.exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        curr_parents = meta.get("parents", [])
+        for p in parents:
+            if p not in curr_parents:
+                curr_parents.append(p)
+        meta["parents"] = curr_parents
+    else:
+        meta = {
+            "project_id": proj_id,
+            "name": name,
+            "phase": "COR",
+            "parents": parents,
+            "is_private": is_private,
+            "mandatory": False,
+            "description": desc,
+            "schema_version": "0.5.3"
+        }
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+
 def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión de la Biblioteca Privada (data/library/bib/) y Corpus Bibliográfico."""
     bib_dir = data_dir / "library" / "bib"
     bib_dir.mkdir(parents=True, exist_ok=True)
 
+    # Asegurar Pilar MOSBIB
+    _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [], False, "Pilar herencial de obras y fuentes bibliográficas")
+
     print("\n=======================================================")
-    print(" 📚 GESTIÓN DE BIBLIOTECA Y CORPUS BIBLIOGRÁFICO")
+    print(" 📚 GESTIÓN DE BIBLIOTECA Y PROYECTOS OBRA (AUTHOR-*)")
     print("=======================================================")
-    print("  [1] Inicializar Nodo Autor (ej. AUTHOR-W3C)")
-    print("  [2] Importar Obra en Biblioteca Privada (data/library/bib/)")
+    print("  [1] Inicializar Nodo Autor Consolidador (ej. AUTHOR-W3C)")
+    print("  [2] Registrar OBRA FORMAL Y MATRIZ RAW (ej. AUTHOR-W3C-WCAG22)")
     print("  [3] Ejecutar Kill-Switch / Revocación de Cita Literal")
     print("  [0] Volver al Menú Principal")
     print("-------------------------------------------------------")
@@ -150,72 +199,64 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     opt = input("Selecciona una opción [0-3]: ").strip()
 
     if opt == "1":
-        author_id = input("ID del Autor (ej. AUTHOR-W3C): ").strip().upper()
+        author_id = input("ID del Autor Consolidador (ej. AUTHOR-W3C): ").strip().upper()
         if not author_id.startswith("AUTHOR-"):
             author_id = f"AUTHOR-{author_id}"
         
         name = input(f"Nombre completo del Autor [{author_id}]: ").strip() or author_id
         desc = input("Descripción doctrinal del corpus del autor: ").strip()
 
-        proj_dir = pm.projects_root / author_id
-        if proj_dir.exists():
-            print(f"⚠️ El proyecto '{author_id}' ya existe.")
-            return
-
-        pm.create_project(
-            name=author_id,
-            parents=["MOSAUTHOR"],
-            is_private=False,
-            mandatory=False
-        )
-
-        meta = {
-            "project_id": author_id,
-            "name": name,
-            "phase": "COR",
-            "parents": ["MOSAUTHOR"],
-            "is_private": False,
-            "mandatory": False,
-            "description": desc,
-            "schema_version": "0.5.3"
-        }
-        with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
-
+        _ensure_project_exists(pm, author_id, name, ["MOSAUTHOR"], False, desc)
         (bib_dir / author_id).mkdir(parents=True, exist_ok=True)
-        print(f"✅ Nodo Autor '{author_id}' e infraestructura inicializados con éxito.")
+        print(f"✅ Nodo Autor Consolidador '{author_id}' (Hijo de MOSAUTHOR) inicializado con éxito.")
 
     elif opt == "2":
-        authors = [d.name for d in bib_dir.iterdir() if d.is_dir()]
-        if not authors:
-            print("❌ No hay autores registrados. Inicializa un nodo autor primero.")
+        author_dirs = [d.name for d in pm.projects_root.iterdir() if d.is_dir() and d.name.startswith("AUTHOR-") and len(d.name.split("-")) == 2]
+        if not author_dirs:
+            print("❌ No hay nodos autor consolidador. Inicializa un nodo autor primero (opción 1).")
             return
 
-        print("Autores disponibles:")
-        for i, a in enumerate(authors, 1):
+        print("Autores/Pilares disponibles:")
+        for i, a in enumerate(author_dirs, 1):
             print(f"  [{i}] {a}")
         
         try:
             a_idx = int(input("Selecciona Autor: ")) - 1
-            author_id = authors[a_idx]
+            parent_author_id = author_dirs[a_idx]
         except (ValueError, IndexError):
             print("❌ Selección no válida.")
             return
 
-        work_id = input("ID corto de la obra (ej. WCAG22): ").strip().upper()
+        work_code = input("ID corto de la obra (ej. WCAG22): ").strip().upper()
+        work_project_id = f"{parent_author_id}-{work_code}"
+        raw_project_id = f"{work_project_id}-RAW"
+
         title = input("Título completo de la obra: ").strip()
         publisher = input("Editorial / Entidad Emisora: ").strip()
         year_raw = input("Año de publicación: ").strip()
         year = int(year_raw) if year_raw.isdigit() else 2026
         url = input("URL / DOI / ISBN de referencia: ").strip()
-        license_type = input("Tipo de Licencia (ej. W3C, Public Domain, CC-BY, Copyright): ").strip() or "Copyright"
+        license_type = input("Tipo de Licencia (ej. W3C, Public Domain, CC-BY, Copyright): ").strip() or "W3C"
         
         allow_export = ask_confirmation("¿Permite exportación de texto literal completo (Dominio Público/Licencia Abierta)?")
+        raw_is_private = not allow_export
 
         raw_file_str = input("Ruta al archivo original completo (opcional, Enter para omitir): ").strip()
         sha256_str = ""
-        
-        work_dir = bib_dir / author_id / work_id
+
+        # 1. PROYECTO NODO MAESTRO / RAW (Origen absoluto)
+        _ensure_project_exists(pm, raw_project_id, f"Fuente Matriz RAW: {title}", [], raw_is_private, f"Archivo maestro original de {title}")
+
+        # 2. PROYECTO OBRA DESPIECE ATÓMICO (Hereda de RAW)
+        _ensure_project_exists(pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
+
+        # 3. CONFLUENCIA EN MOSBIB Y EN EL AUTOR CONSOLIDADOR
+        _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [work_project_id], False, "Pilar herencial de obras")
+        _ensure_project_exists(pm, parent_author_id, parent_author_id, [work_project_id, "MOSBIB"], False, "Autor consolidador")
+        _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [parent_author_id], False, "Nodo central de herencia")
+
+        # 4. GUARDAR EN BIBLIOTECA PRIVADA
+        work_dir = bib_dir / parent_author_id / work_code
         (work_dir / "raw").mkdir(parents=True, exist_ok=True)
         (work_dir / "split").mkdir(parents=True, exist_ok=True)
 
@@ -228,9 +269,11 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
                 sha256_str = _calculate_sha256(dest_file)
                 print(f"✅ Archivo origen copiado a la biblioteca privada. SHA-256: {sha256_str}")
 
-        meta = {
-            "author_id": author_id,
-            "work_id": work_id,
+        bib_meta = {
+            "project_id": work_project_id,
+            "raw_project_id": raw_project_id,
+            "author_id": parent_author_id,
+            "work_id": work_code,
             "title": title,
             "publisher": publisher,
             "year": year,
@@ -242,9 +285,11 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         }
 
         with open(work_dir / "metadata.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
+            json.dump(bib_meta, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ Obra '{work_id}' registrada correctamente en la biblioteca privada de '{author_id}'.")
+        print(f"✅ FUENTE MATRIZ CREADA: '{raw_project_id}' (Visibilidad: {'🔒 PRIVADA' if raw_is_private else '🌐 PÚBLICA'})")
+        print(f"✅ OBRA DESPIECE CREADA: '{work_project_id}' (Hereda de '{raw_project_id}')")
+        print(f"✅ JERARQUÍA CONSOLIDADA: {work_project_id} ➔ MOSBIB & {parent_author_id} ➔ MOSAUTHOR")
 
     elif opt == "3":
         print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
@@ -284,17 +329,31 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
             meta["kill_switch_enabled"] = True
             with open(meta_file, "w", encoding="utf-8") as f:
                 json.dump(meta, f, indent=2, ensure_ascii=False)
-            print("🛑 Kill-Switch activado. La siguiente compilación purgará las citas literales públicas.")
+            
+            raw_id = meta.get("raw_project_id")
+            if raw_id:
+                raw_json = pm.projects_root / raw_id / "project.json"
+                if raw_json.exists():
+                    with open(raw_json, "r", encoding="utf-8") as f:
+                        rmeta = json.load(f)
+                    rmeta["is_private"] = True
+                    with open(raw_json, "w", encoding="utf-8") as f:
+                        json.dump(rmeta, f, indent=2, ensure_ascii=False)
+
+            print("🛑 Kill-Switch activado. La fuente matriz se ha bloqueado como PRIVADA y se purgará la cita literal.")
 
 def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión del Pilar MOSPAT y Registro de Patentes (Freedom to Operate - FTO)."""
     pat_dir = data_dir / "library" / "patents"
     pat_dir.mkdir(parents=True, exist_ok=True)
 
+    # Asegurar Pilar MOSPAT
+    _ensure_project_exists(pm, "MOSPAT", "Pilar Global de Patentes y FTO", [], False, "Pilar herencial de patentes")
+
     print("\n=======================================================")
     print(" ⚖️ GESTIÓN DE PATENTES Y FREEDOM TO OPERATE (MOSPAT)")
     print("=======================================================")
-    print("  [1] Registrar Nueva Patente en Biblioteca Privada")
+    print("  [1] Registrar Nueva Patente como PROYECTO FORMAL INDEPENDIENTE")
     print("  [2] Consultar Estado FTO y Expiración Territorial")
     print("  [0] Volver al Menú Principal")
     print("-------------------------------------------------------")
@@ -302,8 +361,22 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
     opt = input("Selecciona una opción [0-2]: ").strip()
 
     if opt == "1":
-        patent_id = input("ID de Patente (ej. PATENT-US-123456): ").strip().upper()
+        patent_code = input("Código de Patente (ej. US-123456): ").strip().upper()
+        pat_project_id = f"PATENT-{patent_code}"
+        raw_project_id = f"{pat_project_id}-RAW"
+
         title = input("Título / Objeto de la Patente: ").strip()
+        
+        author_dirs = [d.name for d in pm.projects_root.iterdir() if d.is_dir() and d.name.startswith("AUTHOR-") and len(d.name.split("-")) == 2]
+        author_id = None
+        if author_dirs:
+            print("\nSelecciona el Autor/Titular de la patente (opcional):")
+            for i, a in enumerate(author_dirs, 1):
+                print(f"  [{i}] {a}")
+            a_sel = input("Selecciona número de Autor (o Enter para omitir): ").strip()
+            if a_sel.isdigit() and 1 <= int(a_sel) <= len(author_dirs):
+                author_id = author_dirs[int(a_sel) - 1]
+
         jurisdiction = input("Jurisdicción Principal (ej. US, EP, ES): ").strip().upper() or "US"
         grant_year_raw = input("Año de Concesión: ").strip()
         grant_year = int(grant_year_raw) if grant_year_raw.isdigit() else 2010
@@ -311,12 +384,26 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
 
         claims_str = input("Resumen de Reivindicaciones Clave (Claims): ").strip()
         is_expired = datetime.datetime.now().year >= expiry_year
+        is_private_raw = ask_confirmation("¿El documento original de patente es de uso privado / restringido?", default=False)
 
-        p_folder = pat_dir / patent_id
+        # 1. MATRIZ RAW Y NODO PATENTE DESPIECE
+        _ensure_project_exists(pm, raw_project_id, f"Documento Matriz Patente: {title}", [], is_private_raw, f"Documento original de patente {patent_code}")
+        _ensure_project_exists(pm, pat_project_id, f"Patente: {title}", [raw_project_id], False, f"FTO y Claims de {patent_code}")
+
+        # 2. HERENCIA HACIA MOSPAT Y AUTOR
+        _ensure_project_exists(pm, "MOSPAT", "Pilar Global de Patentes", [pat_project_id], False, "Pilar herencial de patentes")
+        if author_id:
+            _ensure_project_exists(pm, author_id, author_id, [pat_project_id, "MOSPAT"], False, "Autor consolidador")
+            _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [author_id], False, "Nodo central de herencia")
+
+        # 3. BIBLIOTECA PRIVADA
+        p_folder = pat_dir / pat_project_id
         p_folder.mkdir(parents=True, exist_ok=True)
 
-        meta = {
-            "patent_id": patent_id,
+        meta_bib = {
+            "patent_id": pat_project_id,
+            "raw_project_id": raw_project_id,
+            "author_id": author_id,
             "title": title,
             "jurisdiction": jurisdiction,
             "grant_year": grant_year,
@@ -327,9 +414,9 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
         }
 
         with open(p_folder / "metadata.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
+            json.dump(meta_bib, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ Patente '{patent_id}' registrada. Expiración global estimada: {expiry_year} ({'EXPIRADA' if is_expired else 'ACTIVA'}).")
+        print(f"✅ PATENTE MATRIZ Y DESPIECE REGISTRADOS: '{pat_project_id}' ➔ MOSPAT ➔ MOSAUTHOR")
 
     elif opt == "2":
         patents = [d for d in pat_dir.iterdir() if d.is_dir() and (d / "metadata.json").exists()]
@@ -342,17 +429,21 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
             with open(p / "metadata.json", "r", encoding="utf-8") as f:
                 d = json.load(f)
             st_str = "🟢 EXPIRADA" if d.get("is_expired") else "🔴 ACTIVA (Restricción FTO)"
-            print(f"  • {d.get('patent_id')}: {d.get('title')} [{st_str}] - Expiración: {d.get('expiry_year_global')}")
+            aut_str = f" | Autor: {d.get('author_id')}" if d.get("author_id") else ""
+            print(f"  • {d.get('patent_id')}: {d.get('title')} [{st_str}]{aut_str} - Expiración: {d.get('expiry_year_global')}")
 
 def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión del Pilar MOSAUDIT, Auditoría de Código y Comparativa Declarado vs Decompilado."""
     audit_dir = data_dir / "library" / "audit"
     audit_dir.mkdir(parents=True, exist_ok=True)
 
+    # Asegurar Pilar MOSAUDIT
+    _ensure_project_exists(pm, "MOSAUDIT", "Pilar Global de Auditoría de Código", [], False, "Pilar herencial de auditorías y decompilados")
+
     print("\n=======================================================")
     print(" 🛡️ AUDITORÍA DE CÓDIGO Y DECOMPILACIONES (MOSAUDIT)")
     print("=======================================================")
-    print("  [1] Registrar Proyecto para Auditoría Paratáctica")
+    print("  [1] Registrar Proyecto de Auditoría COMO PROYECTO FORMAL INDEPENDIENTE")
     print("  [2] Inspeccionar Discrepancias / Inyecciones de Código")
     print("  [0] Volver al Menú Principal")
     print("-------------------------------------------------------")
@@ -360,11 +451,37 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
     opt = input("Selecciona una opción [0-2]: ").strip()
 
     if opt == "1":
-        target_app = input("Nombre de la Aplicación / Componente a auditar: ").strip().upper()
+        app_code = input("Código / ID de Aplicación (ej. APP-XYZ): ").strip().upper()
+        audit_project_id = f"AUDIT-{app_code}"
+        raw_project_id = f"{audit_project_id}-RAW"
+
+        author_dirs = [d.name for d in pm.projects_root.iterdir() if d.is_dir() and d.name.startswith("AUTHOR-") and len(d.name.split("-")) == 2]
+        author_id = None
+        if author_dirs:
+            print("\nSelecciona el Autor/Desarrollador del software (opcional):")
+            for i, a in enumerate(author_dirs, 1):
+                print(f"  [{i}] {a}")
+            a_sel = input("Selecciona número de Autor (o Enter para omitir): ").strip()
+            if a_sel.isdigit() and 1 <= int(a_sel) <= len(author_dirs):
+                author_id = author_dirs[int(a_sel) - 1]
+
         declared_repo = input("URL/Ruta del Repositorio Open Source Declarado: ").strip()
         binary_path_str = input("Ruta al Binario Ejecutable Decompilado (opcional): ").strip()
 
-        app_dir = audit_dir / target_app
+        is_private_raw = ask_confirmation("¿El binario/código decompilado original es de carácter PRIVADO?", default=True)
+
+        # 1. MATRIZ RAW Y DESPIECE AUDITORÍA
+        _ensure_project_exists(pm, raw_project_id, f"Binarios / Decompilado RAW: {app_code}", [], is_private_raw, f"Binarios decompilados de {app_code}")
+        _ensure_project_exists(pm, audit_project_id, f"Auditoría: {app_code}", [raw_project_id], False, f"Especificación de auditoría de {app_code}")
+
+        # 2. HERENCIA HACIA MOSAUDIT Y AUTOR
+        _ensure_project_exists(pm, "MOSAUDIT", "Pilar Global de Auditorías", [audit_project_id], False, "Pilar herencial de auditorías")
+        if author_id:
+            _ensure_project_exists(pm, author_id, author_id, [audit_project_id, "MOSAUDIT"], False, "Autor consolidador")
+            _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [author_id], False, "Nodo central de herencia")
+
+        # 3. BIBLIOTECA PRIVADA
+        app_dir = audit_dir / audit_project_id
         (app_dir / "declared").mkdir(parents=True, exist_ok=True)
         (app_dir / "decomp").mkdir(parents=True, exist_ok=True)
 
@@ -377,8 +494,10 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
                 shutil.copy(bp, dest_bin)
                 sha256_str = _calculate_sha256(dest_bin)
 
-        meta = {
-            "app_id": target_app,
+        meta_bib = {
+            "app_id": audit_project_id,
+            "raw_project_id": raw_project_id,
+            "author_id": author_id,
             "declared_repo": declared_repo,
             "has_decompiled_binary": bool(binary_path_str),
             "sha256_hash": sha256_str,
@@ -386,9 +505,9 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
         }
 
         with open(app_dir / "metadata.json", "w", encoding="utf-8") as f:
-            json.dump(meta, f, indent=2, ensure_ascii=False)
+            json.dump(meta_bib, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ Estructura de auditoría inicializada para '{target_app}'.")
+        print(f"✅ AUDITORÍA REGISTRADA CON ÉXITO: '{audit_project_id}' ➔ MOSAUDIT ➔ MOSAUTHOR")
 
     elif opt == "2":
         apps = [d for d in audit_dir.iterdir() if d.is_dir() and (d / "metadata.json").exists()]
@@ -400,7 +519,8 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
         for a in apps:
             with open(a / "metadata.json", "r", encoding="utf-8") as f:
                 d = json.load(f)
-            print(f"  • Componente: {d.get('app_id')} | Hash SHA-256 Binario: {d.get('sha256_hash') or 'N/A'}")
+            aut_str = f" | Autor: {d.get('author_id')}" if d.get("author_id") else ""
+            print(f"  • Componente: {d.get('app_id')}{aut_str} | Hash SHA-256 Binario: {d.get('sha256_hash') or 'N/A'}")
 
 # ==============================================================================
 # FUNCIONES DE MENÚ PRINCIPAL Y CONFIGURACIÓN DE PROYECTOS
@@ -1173,7 +1293,6 @@ def main() -> None:
         compile_parser = subparsers.add_parser("compile", help="Compilación")
         compile_parser.add_argument("--project", required=True)
 
-        # Comandos CLI directos para bib, pat y audit
         bib_parser = subparsers.add_parser("bib", help="Gestión de Biblioteca y Licencias")
         bib_parser.add_argument("--action", choices=["revoke", "status"], required=True)
         bib_parser.add_argument("--work", help="ID de la obra")
@@ -1215,6 +1334,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.2
-# File_Version: 0.5.2.5
+# Version: 0.5.3
+# File_Version: 0.5.2.9
 # Schema_Version: 0.5.3
