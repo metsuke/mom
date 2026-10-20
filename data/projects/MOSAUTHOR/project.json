@@ -1,0 +1,8 @@
+{
+  "project_id": "MOSAUTHOR",
+  "name": "MetsuOS Global Author & Bibliographic Corpus Standard",
+  "phase": "COR",
+  "parents": [],
+  "is_private": false,
+  "description": "Pilar raíz de la rama bibliográfica y corpus de conocimiento global. Gestiona la red de autores, obras, pasajes y proposiciones atómicas con cálculo de fiabilidad epistemológica."
+}
