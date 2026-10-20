@@ -3,6 +3,8 @@
   "name": "MetsuOS Consolidated Core Architecture",
   "parents": [
     "MOSCON",
+    "MOSCPS",
+    "MOSPSH",
     "MOSSTD"
   ],
   "is_private": false,

@@ -6,7 +6,7 @@
 
 ## 🎯 Principios Doctrinales
 
-1. **Accesibilidad Universal (A11y First):** Ningún componente, interfaz o artefacto del sistema puede diseñarse ignorando estándares estritos de accesibilidad e inclusión.
+1. **Accesibilidad Universal (A11y First):** Ningún componente, interfaz o artefacto del sistema puede diseñarse ignorando estándares estrictos de accesibilidad e inclusión.
 2. **Interfaces Adaptativas y Resilientes:** Adaptabilidad dinámica a las necesidades cognitivas, físicas y operativas del usuario o del entorno táctico.
 3. **Trazabilidad de Cumplimiento:** Garantizar que los requisitos de accesibilidad alimenten directamente los estándares globales del sistema (`MOSSTD`).
 

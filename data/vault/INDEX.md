@@ -31,6 +31,8 @@ graph LR
     MOSNATO --> MOSCON
     MOSCPS --> MOSCON
     MOSCON --> MOSCOR
+    MOSCPS --> MOSCOR
+    MOSPSH --> MOSCOR
     MOSSTD --> MOSCOR
     MOSA11Y --> MOSSTD
     MOSESA --> MOSSTD

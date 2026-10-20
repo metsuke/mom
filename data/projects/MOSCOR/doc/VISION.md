@@ -38,7 +38,7 @@ Como proyecto integrado en la metodología **MOM**, este documento ofrece una **
 
 # Visión y Doctrina: MOSCOR (Consolidated Core Architecture)
 
-> **Proclamación Doctrinal:** MOSCOR es el núcleo de convergencia técnica donde syntetizan las doctrinas de contexto (`MOSCON`), ciberfísica (`MOSCPS`), factor humano (`MOSPSH`) y los estándares integrados (`MOSSTD`), sirviendo como antecedente directo para la metodología global `MOM`.
+> **Proclamación Doctrinal:** MOSCOR es el núcleo de convergencia técnica donde sintetizan las doctrinas de contexto (`MOSCON`), resolución de problemas complejos (`MOSCPS`), psicohistoria (`MOSPSH`) y los estándares integrados (`MOSSTD`), sirviendo como antecedente directo para la metodología global `MOM`.
 
 ---
 
@@ -49,6 +49,13 @@ Como proyecto integrado en la metodología **MOM**, este documento ofrece una **
 3. **Sostén de la Metodología:** Proporcionar la base arquitectónica sobre la cual la metodología `MOM` ejerce la compilación final.
 
 ---
+```
+
+---
+
+Una vez guardados en disco estos ficheros para **MOSA11Y**, **MOSESA**, **MOSSTD**, **MOSCPS**, **MOSPSH** y **MOSCOR**, podemos ejecutar la compilación global para que el sistema genere sus documentos de visión, sincronice los Vaults e inyecte los grafos actualizados.
+
+¿Confirmas cuando los tengas colocados para proceder a la compilación o continuar con `MOSAUTHOR`?
 
 ---
 
