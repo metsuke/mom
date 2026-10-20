@@ -3,7 +3,7 @@ import re
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
-CURRENT_SCHEMA_VERSION = "0.5.2"
+CURRENT_SCHEMA_VERSION = "0.5.3"
 
 class ESAPhase(str, Enum):
     COR = "cor"  # Phase 0: Corpus de Filosofía, Axiomas y Estándares
@@ -80,7 +80,9 @@ class ItemAttributes:
         bib_citation_detail: Optional[str] = None,
         metsuos_knowledge_level: Optional[MetsuOSKnowledgeLevel] = None,
         nato_source_reliability: Optional[str] = None,
-        nato_information_credibility: Optional[str] = None
+        nato_information_credibility: Optional[str] = None,
+        supports_item_ids: Optional[List[str]] = None,
+        refutes_item_ids: Optional[List[str]] = None
     ) -> None:
         self.status = status
         self.priority = priority
@@ -94,6 +96,8 @@ class ItemAttributes:
         self.metsuos_knowledge_level = metsuos_knowledge_level
         self.nato_source_reliability = nato_source_reliability
         self.nato_information_credibility = nato_information_credibility
+        self.supports_item_ids = supports_item_ids or []
+        self.refutes_item_ids = refutes_item_ids or []
 
     def to_dict(self) -> Dict[str, Any]:
         data = {
@@ -117,6 +121,10 @@ class ItemAttributes:
             data["nato_source_reliability"] = self.nato_source_reliability
         if self.nato_information_credibility:
             data["nato_information_credibility"] = self.nato_information_credibility
+        if self.supports_item_ids:
+            data["supports_item_ids"] = self.supports_item_ids
+        if self.refutes_item_ids:
+            data["refutes_item_ids"] = self.refutes_item_ids
         return data
 
     @classmethod
@@ -142,7 +150,9 @@ class ItemAttributes:
             bib_citation_detail=data.get("bib_citation_detail"),
             metsuos_knowledge_level=kl_enum,
             nato_source_reliability=data.get("nato_source_reliability"),
-            nato_information_credibility=data.get("nato_information_credibility")
+            nato_information_credibility=data.get("nato_information_credibility"),
+            supports_item_ids=data.get("supports_item_ids", []),
+            refutes_item_ids=data.get("refutes_item_ids", [])
         )
 
 class ItemMetadata:
@@ -254,3 +264,5 @@ def format_item_id(project_prefix: str, phase_code: str, num: int, min_digits: i
     return f"{project_prefix.upper()}-{phase_code.upper()}-{num:0{digits}d}"
 
 # Version: 0.5.2
+# File_Version: 0.5.2.34
+# Schema_Version: 0.5.3

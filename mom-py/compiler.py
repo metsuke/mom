@@ -178,6 +178,9 @@ class MOMCompiler:
 
         bib_block = "\n".join(bib_lines) + "\n\n" if bib_lines else ""
 
+        supports_str = f"**Apoya a:** {', '.join([f'[[{sid}]]' for sid in attr.supports_item_ids])}\n" if hasattr(attr, 'supports_item_ids') and attr.supports_item_ids else ""
+        refutes_str = f"**Refuta a:** {', '.join([f'[[{rid}]]' for rid in attr.refutes_item_ids])}\n" if hasattr(attr, 'refutes_item_ids') and attr.refutes_item_ids else ""
+
         status_val = attr.status.value if hasattr(attr.status, 'value') else str(attr.status)
         prio_val = attr.priority.value if hasattr(attr.priority, 'value') else str(attr.priority)
         verif_val = attr.verification_method.value if hasattr(attr.verification_method, 'value') else str(attr.verification_method)
@@ -186,7 +189,7 @@ class MOMCompiler:
                 f"**Estado:** `{status_val}` | **Prioridad:** `{prio_val}` | **Verificación:** `{verif_val}`{kl_str}{nato_str} | {origin}\n\n" \
                 f"#### Descripción\n{item.description}\n\n" \
                 f"{bib_block}" \
-                f"{parents}{children}{guardrail}\n---"
+                f"{parents}{children}{supports_str}{refutes_str}{guardrail}\n---"
         return block
 
     def compile_obsidian_vault(self) -> None:
@@ -451,7 +454,7 @@ schema_version: "{item.schema_version}"
 
             return f"""---
 iaStatus: 8
-iaStatus_Model: "MOM 0.5.2.33 MetsuOS Methodology Framework"
+iaStatus_Model: "MOM 0.5.3 MetsuOS Methodology Framework"
 iaStatus_Generado: "I"
 iaStatus_Supervisado: "H"
 iaStatus_Validado: "-"
@@ -465,7 +468,7 @@ supervisado: ""
 ACCION: ""
 ver_major: 0
 ver_minor: 5
-ver_rev: 33
+ver_rev: 34
 nav_primary: 
 nav_secondary: {tags_block}
 ---"""
@@ -822,5 +825,5 @@ nav_secondary: {tags_block}
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
 # Version: 0.5.2
-# File_Version: 0.5.2.33
-# Schema_Version: 0.5.2
+# File_Version: 0.5.2.34
+# Schema_Version: 0.5.3

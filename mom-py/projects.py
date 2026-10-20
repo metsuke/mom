@@ -143,6 +143,7 @@ class MOMInheritedRepository:
         """
         Consolida todas las especificaciones a lo largo de la cadena DAG.
         Garantiza que las URD y COR (nodos raíz) se mantengan incluso con mandatory=False.
+        Soporta resolución de referencias activas (soporte, refutación y bibliografía).
         """
         project_items_map: Dict[str, Dict[str, MOMItem]] = {}
         project_configs: Dict[str, MOMProjectConfig] = {}
@@ -186,6 +187,12 @@ class MOMInheritedRepository:
                 for active_item in list(consolidated.values()):
                     for pid in active_item.parent_ids:
                         referenced_ids.add(pid)
+                    if hasattr(active_item.attributes, 'supports_item_ids') and active_item.attributes.supports_item_ids:
+                        for sid in active_item.attributes.supports_item_ids:
+                            referenced_ids.add(sid)
+                    if hasattr(active_item.attributes, 'refutes_item_ids') and active_item.attributes.refutes_item_ids:
+                        for rid in active_item.attributes.refutes_item_ids:
+                            referenced_ids.add(rid)
 
                 for item_id, ancestor_item in ancestor_items.items():
                     phase_str = ancestor_item.phase.value if hasattr(ancestor_item.phase, 'value') else str(ancestor_item.phase)
@@ -299,3 +306,5 @@ class MOMProjectManager:
         return repo
 
 # Version: 0.5.2
+# File_Version: 0.5.2.34
+# Schema_Version: 0.5.3
