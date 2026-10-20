@@ -232,3 +232,5 @@ node_modules/
 .obsidian/cache/
 
 # Version: 0.2.2
+# Biblioteca privada e inmutable (Fuentes Raw)
+data/library/

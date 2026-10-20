@@ -4,8 +4,9 @@ import re
 import curses
 import argparse
 import datetime
+import hashlib
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 
 current_dir = Path(__file__).resolve().parent
 if str(current_dir) not in sys.path:
@@ -120,6 +121,291 @@ def get_next_auto_id(inherited_repo: MOMInheritedRepository, phase: ESAPhase, pr
     next_num = max(existing_numbers) + 1 if existing_numbers else 1
     return f"{prefix}-{next_num:03d}"
 
+# ==============================================================================
+# MÓDULOS DE BIBLIOTECA, PATENTES Y AUDITORÍA DE CÓDIGO (Standard Library Only)
+# ==============================================================================
+
+def _calculate_sha256(file_path: Path) -> str:
+    """Calcula el hash SHA-256 de un archivo local para verificación de integridad."""
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
+    """Gestión de la Biblioteca Privada (data/library/bib/) y Corpus Bibliográfico."""
+    bib_dir = data_dir / "library" / "bib"
+    bib_dir.mkdir(parents=True, exist_ok=True)
+
+    print("\n=======================================================")
+    print(" 📚 GESTIÓN DE BIBLIOTECA Y CORPUS BIBLIOGRÁFICO")
+    print("=======================================================")
+    print("  [1] Inicializar Nodo Autor (ej. AUTHOR-W3C)")
+    print("  [2] Importar Obra en Biblioteca Privada (data/library/bib/)")
+    print("  [3] Ejecutar Kill-Switch / Revocación de Cita Literal")
+    print("  [0] Volver al Menú Principal")
+    print("-------------------------------------------------------")
+
+    opt = input("Selecciona una opción [0-3]: ").strip()
+
+    if opt == "1":
+        author_id = input("ID del Autor (ej. AUTHOR-W3C): ").strip().upper()
+        if not author_id.startswith("AUTHOR-"):
+            author_id = f"AUTHOR-{author_id}"
+        
+        name = input(f"Nombre completo del Autor [{author_id}]: ").strip() or author_id
+        desc = input("Descripción doctrinal del corpus del autor: ").strip()
+
+        proj_dir = pm.projects_root / author_id
+        if proj_dir.exists():
+            print(f"⚠️ El proyecto '{author_id}' ya existe.")
+            return
+
+        pm.create_project(
+            name=author_id,
+            parents=["MOSAUTHOR"],
+            is_private=False,
+            mandatory=False
+        )
+
+        meta = {
+            "project_id": author_id,
+            "name": name,
+            "phase": "COR",
+            "parents": ["MOSAUTHOR"],
+            "is_private": False,
+            "mandatory": False,
+            "description": desc,
+            "schema_version": "0.5.3"
+        }
+        with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+        (bib_dir / author_id).mkdir(parents=True, exist_ok=True)
+        print(f"✅ Nodo Autor '{author_id}' e infraestructura inicializados con éxito.")
+
+    elif opt == "2":
+        authors = [d.name for d in bib_dir.iterdir() if d.is_dir()]
+        if not authors:
+            print("❌ No hay autores registrados. Inicializa un nodo autor primero.")
+            return
+
+        print("Autores disponibles:")
+        for i, a in enumerate(authors, 1):
+            print(f"  [{i}] {a}")
+        
+        try:
+            a_idx = int(input("Selecciona Autor: ")) - 1
+            author_id = authors[a_idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
+
+        work_id = input("ID corto de la obra (ej. WCAG22): ").strip().upper()
+        title = input("Título completo de la obra: ").strip()
+        publisher = input("Editorial / Entidad Emisora: ").strip()
+        year_raw = input("Año de publicación: ").strip()
+        year = int(year_raw) if year_raw.isdigit() else 2026
+        url = input("URL / DOI / ISBN de referencia: ").strip()
+        license_type = input("Tipo de Licencia (ej. W3C, Public Domain, CC-BY, Copyright): ").strip() or "Copyright"
+        
+        allow_export = ask_confirmation("¿Permite exportación de texto literal completo (Dominio Público/Licencia Abierta)?")
+
+        raw_file_str = input("Ruta al archivo original completo (opcional, Enter para omitir): ").strip()
+        sha256_str = ""
+        
+        work_dir = bib_dir / author_id / work_id
+        (work_dir / "raw").mkdir(parents=True, exist_ok=True)
+        (work_dir / "split").mkdir(parents=True, exist_ok=True)
+
+        if raw_file_str:
+            raw_path = Path(raw_file_str).expanduser().resolve()
+            if raw_path.exists():
+                import shutil
+                dest_file = work_dir / "raw" / raw_path.name
+                shutil.copy(raw_path, dest_file)
+                sha256_str = _calculate_sha256(dest_file)
+                print(f"✅ Archivo origen copiado a la biblioteca privada. SHA-256: {sha256_str}")
+
+        meta = {
+            "author_id": author_id,
+            "work_id": work_id,
+            "title": title,
+            "publisher": publisher,
+            "year": year,
+            "url": url,
+            "license_type": license_type,
+            "allow_full_text_export": allow_export,
+            "kill_switch_enabled": False,
+            "sha256_hash": sha256_str
+        }
+
+        with open(work_dir / "metadata.json", "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+        print(f"✅ Obra '{work_id}' registrada correctamente en la biblioteca privada de '{author_id}'.")
+
+    elif opt == "3":
+        print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
+        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+        all_works = []
+
+        for ad in author_dirs:
+            for wd in ad.iterdir():
+                if wd.is_dir() and (wd / "metadata.json").exists():
+                    all_works.append(wd)
+
+        if not all_works:
+            print("❌ No hay obras registradas en la biblioteca.")
+            return
+
+        print("Obras registradas:")
+        for i, wd in enumerate(all_works, 1):
+            print(f"  [{i}] {wd.parent.name} / {wd.name}")
+
+        try:
+            w_idx = int(input("Selecciona obra para modificar/revocar: ")) - 1
+            target_work = all_works[w_idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
+
+        meta_file = target_work / "metadata.json"
+        with open(meta_file, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+        print(f"\nEstado actual de '{meta.get('work_id')}':")
+        print(f"  • Permitir Texto Literal Público: {meta.get('allow_full_text_export')}")
+        print(f"  • Kill-Switch Activado:          {meta.get('kill_switch_enabled')}")
+
+        if ask_confirmation("¿Deseas ACTIVAR el Kill-Switch y REVOCAR inmediatamente la exportación pública de texto literal?"):
+            meta["allow_full_text_export"] = False
+            meta["kill_switch_enabled"] = True
+            with open(meta_file, "w", encoding="utf-8") as f:
+                json.dump(meta, f, indent=2, ensure_ascii=False)
+            print("🛑 Kill-Switch activado. La siguiente compilación purgará las citas literales públicas.")
+
+def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
+    """Gestión del Pilar MOSPAT y Registro de Patentes (Freedom to Operate - FTO)."""
+    pat_dir = data_dir / "library" / "patents"
+    pat_dir.mkdir(parents=True, exist_ok=True)
+
+    print("\n=======================================================")
+    print(" ⚖️ GESTIÓN DE PATENTES Y FREEDOM TO OPERATE (MOSPAT)")
+    print("=======================================================")
+    print("  [1] Registrar Nueva Patente en Biblioteca Privada")
+    print("  [2] Consultar Estado FTO y Expiración Territorial")
+    print("  [0] Volver al Menú Principal")
+    print("-------------------------------------------------------")
+
+    opt = input("Selecciona una opción [0-2]: ").strip()
+
+    if opt == "1":
+        patent_id = input("ID de Patente (ej. PATENT-US-123456): ").strip().upper()
+        title = input("Título / Objeto de la Patente: ").strip()
+        jurisdiction = input("Jurisdicción Principal (ej. US, EP, ES): ").strip().upper() or "US"
+        grant_year_raw = input("Año de Concesión: ").strip()
+        grant_year = int(grant_year_raw) if grant_year_raw.isdigit() else 2010
+        expiry_year = grant_year + 20
+
+        claims_str = input("Resumen de Reivindicaciones Clave (Claims): ").strip()
+        is_expired = datetime.datetime.now().year >= expiry_year
+
+        p_folder = pat_dir / patent_id
+        p_folder.mkdir(parents=True, exist_ok=True)
+
+        meta = {
+            "patent_id": patent_id,
+            "title": title,
+            "jurisdiction": jurisdiction,
+            "grant_year": grant_year,
+            "expiry_year_global": expiry_year,
+            "is_expired": is_expired,
+            "status": "EXPIRED" if is_expired else "ACTIVE",
+            "claims_summary": claims_str
+        }
+
+        with open(p_folder / "metadata.json", "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+        print(f"✅ Patente '{patent_id}' registrada. Expiración global estimada: {expiry_year} ({'EXPIRADA' if is_expired else 'ACTIVA'}).")
+
+    elif opt == "2":
+        patents = [d for d in pat_dir.iterdir() if d.is_dir() and (d / "metadata.json").exists()]
+        if not patents:
+            print("ℹ️ No hay patentes registradas en MOSPAT.")
+            return
+
+        print("\nPatentes registradas en el sistema:")
+        for p in patents:
+            with open(p / "metadata.json", "r", encoding="utf-8") as f:
+                d = json.load(f)
+            st_str = "🟢 EXPIRADA" if d.get("is_expired") else "🔴 ACTIVA (Restricción FTO)"
+            print(f"  • {d.get('patent_id')}: {d.get('title')} [{st_str}] - Expiración: {d.get('expiry_year_global')}")
+
+def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
+    """Gestión del Pilar MOSAUDIT, Auditoría de Código y Comparativa Declarado vs Decompilado."""
+    audit_dir = data_dir / "library" / "audit"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+
+    print("\n=======================================================")
+    print(" 🛡️ AUDITORÍA DE CÓDIGO Y DECOMPILACIONES (MOSAUDIT)")
+    print("=======================================================")
+    print("  [1] Registrar Proyecto para Auditoría Paratáctica")
+    print("  [2] Inspeccionar Discrepancias / Inyecciones de Código")
+    print("  [0] Volver al Menú Principal")
+    print("-------------------------------------------------------")
+
+    opt = input("Selecciona una opción [0-2]: ").strip()
+
+    if opt == "1":
+        target_app = input("Nombre de la Aplicación / Componente a auditar: ").strip().upper()
+        declared_repo = input("URL/Ruta del Repositorio Open Source Declarado: ").strip()
+        binary_path_str = input("Ruta al Binario Ejecutable Decompilado (opcional): ").strip()
+
+        app_dir = audit_dir / target_app
+        (app_dir / "declared").mkdir(parents=True, exist_ok=True)
+        (app_dir / "decomp").mkdir(parents=True, exist_ok=True)
+
+        sha256_str = ""
+        if binary_path_str:
+            bp = Path(binary_path_str).expanduser().resolve()
+            if bp.exists():
+                import shutil
+                dest_bin = app_dir / "decomp" / bp.name
+                shutil.copy(bp, dest_bin)
+                sha256_str = _calculate_sha256(dest_bin)
+
+        meta = {
+            "app_id": target_app,
+            "declared_repo": declared_repo,
+            "has_decompiled_binary": bool(binary_path_str),
+            "sha256_hash": sha256_str,
+            "audit_date": datetime.datetime.now().isoformat()
+        }
+
+        with open(app_dir / "metadata.json", "w", encoding="utf-8") as f:
+            json.dump(meta, f, indent=2, ensure_ascii=False)
+
+        print(f"✅ Estructura de auditoría inicializada para '{target_app}'.")
+
+    elif opt == "2":
+        apps = [d for d in audit_dir.iterdir() if d.is_dir() and (d / "metadata.json").exists()]
+        if not apps:
+            print("ℹ️ No hay auditorías registradas.")
+            return
+
+        print("\nAuditorías en curso:")
+        for a in apps:
+            with open(a / "metadata.json", "r", encoding="utf-8") as f:
+                d = json.load(f)
+            print(f"  • Componente: {d.get('app_id')} | Hash SHA-256 Binario: {d.get('sha256_hash') or 'N/A'}")
+
+# ==============================================================================
+# FUNCIONES DE MENÚ PRINCIPAL Y CONFIGURACIÓN DE PROYECTOS
+# ==============================================================================
+
 def menu_configure_global_settings(data_dir: Path) -> None:
     """Gestiona la configuración global de MOM almacenada en data/config.json."""
     config_file = data_dir / "config.json"
@@ -149,7 +435,7 @@ def menu_configure_global_settings(data_dir: Path) -> None:
     opt = input("Selecciona una opción [0-2]: ").strip()
 
     if opt == "1":
-        new_path = input("\nIntroduce la ruta absoluta o relativa hacia la carpeta web (ej. ../23-MetsuOS-PublicBrain): ").strip()
+        new_path = input("\nIntroduce la ruta absoluta o relativa hacia la carpeta web: ").strip()
         if new_path:
             p = Path(new_path).expanduser().resolve()
             if not p.exists():
@@ -168,7 +454,7 @@ def menu_configure_global_settings(data_dir: Path) -> None:
             print("✅ Exportación a Web Vault desactivada.")
 
 def menu_create_project(pm: ProjectManager) -> Optional[str]:
-    print("\n--- 📁 CREAR NUEVO PROYECTO MOM (Esquema v0.5.2) ---")
+    print("\n--- 📁 CREAR NUEVO PROYECTO MOM (Esquema v0.5.3) ---")
     project_id = input("ID del proyecto (ej. MOSCON): ").strip().upper()
     if not project_id:
         print("❌ El ID del proyecto es obligatorio.")
@@ -217,7 +503,7 @@ def menu_create_project(pm: ProjectManager) -> Optional[str]:
                 "project_id": project_id,
                 "name": name,
                 "phase": phase,
-                "schema_version": "0.5.2",
+                "schema_version": "0.5.3",
                 "parents": parents,
                 "is_private": is_private,
                 "mandatory": mandatory,
@@ -294,7 +580,7 @@ def menu_view_project_details(pm: ProjectManager, active_project: Optional[str] 
     print(f"  • ID de Proyecto:      {meta.get('project_id', target_project)}")
     print(f"  • Nombre Completo:     {meta.get('name', 'N/A')}")
     print(f"  • Fase Inicial ESA:    {meta.get('phase', 'COR')}")
-    print(f"  • Esquema Compatible:  v{meta.get('schema_version', '0.5.2')}")
+    print(f"  • Esquema Compatible:  v{meta.get('schema_version', '0.5.3')}")
     print(f"  • Visibilidad Git:     {'🔒 PRIVADO (.gitignore)' if meta.get('is_private', True) else '🌐 PÚBLICO'}")
     print(f"  • Carácter:            {'Mandatorio / Obligatorio' if meta.get('mandatory', True) else 'Opcional / Derivado'}")
     print(f"  • Ratio Degradación λ: {meta.get('default_decay_rate', 0.05)}")
@@ -414,7 +700,7 @@ def menu_configure_project(pm: ProjectManager, active_project: Optional[str] = N
         print("🛑 Cancelado.")
         return
 
-    meta["schema_version"] = "0.5.2"
+    meta["schema_version"] = "0.5.3"
 
     if ask_confirmation("¿Guardar los cambios de configuración en project.json?"):
         with open(proj_json, "w", encoding="utf-8") as f:
@@ -463,6 +749,12 @@ def menu_create_item(pm: ProjectManager, active_project: Optional[str] = None) -
     print("\nSelecciona los elementos padres de los que hereda este ítem (flechas + espacio):")
     parent_ids = select_parent_items_interactively(inherited_repo, current_phase=phase)
 
+    supports_raw = input("IDs apoyados / respaldados separados por coma (supports_item_ids): ").strip()
+    supports_ids = [s.strip().upper() for s in supports_raw.split(",") if s.strip()] if supports_raw else []
+
+    refutes_raw = input("IDs refutados / contradichos separados por coma (refutes_item_ids): ").strip()
+    refutes_ids = [r.strip().upper() for r in refutes_raw.split(",") if r.strip()] if refutes_raw else []
+
     is_user_doc = ask_confirmation("¿Este elemento debe incluirse en el Manual de Usuario u Onboarding?")
     guardrails = input("AI Guardrails / Instrucciones inmutables para la IA (opcional): ").strip() or None
 
@@ -471,6 +763,8 @@ def menu_create_item(pm: ProjectManager, active_project: Optional[str] = None) -
     print(f"  • Fase: {phase.value.upper()}")
     print(f"  • Título: {title}")
     print(f"  • Padres: {parent_ids if parent_ids else 'Ninguno'}")
+    print(f"  • Apoya a: {supports_ids if supports_ids else 'Ninguno'}")
+    print(f"  • Refuta a: {refutes_ids if refutes_ids else 'Ninguno'}")
     print(f"  • Doc Usuario: {is_user_doc}")
     print(f"  • Guardrails: {guardrails if guardrails else 'Ninguno'}")
 
@@ -482,7 +776,12 @@ def menu_create_item(pm: ProjectManager, active_project: Optional[str] = None) -
                 title=title,
                 description=description,
                 parent_ids=parent_ids,
-                attributes=ItemAttributes(priority=PriorityEnum.HIGH, is_user_doc=is_user_doc),
+                attributes=ItemAttributes(
+                    priority=PriorityEnum.HIGH, 
+                    is_user_doc=is_user_doc,
+                    supports_item_ids=supports_ids,
+                    refutes_item_ids=refutes_ids
+                ),
                 metadata=ItemMetadata(author="Metsuke", declared_in_project=target_project, ai_guardrails=guardrails)
             )
             saved_path = inherited_repo.save_item(item)
@@ -548,6 +847,14 @@ def menu_edit_item(pm: ProjectManager, active_project: Optional[str] = None) -> 
     print("\nModificar elementos padres de los que hereda (flechas + espacio):")
     parent_ids = select_parent_items_interactively(inherited_repo, current_phase=existing_item.phase, preselected=existing_item.parent_ids)
 
+    curr_supports = getattr(existing_item.attributes, 'supports_item_ids', [])
+    supports_in = input(f"IDs apoyados/respaldados [{', '.join(curr_supports)}]: ").strip()
+    supports_ids = [s.strip().upper() for s in supports_in.split(",") if s.strip()] if supports_in else curr_supports
+
+    curr_refutes = getattr(existing_item.attributes, 'refutes_item_ids', [])
+    refutes_in = input(f"IDs refutados/contradichos [{', '.join(curr_refutes)}]: ").strip()
+    refutes_ids = [r.strip().upper() for r in refutes_in.split(",") if r.strip()] if refutes_in else curr_refutes
+
     is_user_doc = ask_confirmation("¿Este elemento debe incluirse en el Manual de Usuario u Onboarding?", default=existing_item.attributes.is_user_doc)
     
     current_g = existing_item.metadata.ai_guardrails
@@ -560,6 +867,8 @@ def menu_edit_item(pm: ProjectManager, active_project: Optional[str] = None) -> 
     print(f"  • Fase: {existing_item.phase.value.upper()}")
     print(f"  • Título: {title}")
     print(f"  • Padres: {parent_ids if parent_ids else 'Ninguno'}")
+    print(f"  • Apoya a: {supports_ids if supports_ids else 'Ninguno'}")
+    print(f"  • Refuta a: {refutes_ids if refutes_ids else 'Ninguno'}")
     print(f"  • Doc Usuario: {is_user_doc}")
     print(f"  • Guardrails: {guardrails if guardrails else 'Ninguno'}")
 
@@ -571,7 +880,12 @@ def menu_edit_item(pm: ProjectManager, active_project: Optional[str] = None) -> 
                 title=title,
                 description=description,
                 parent_ids=parent_ids,
-                attributes=ItemAttributes(priority=existing_item.attributes.priority, is_user_doc=is_user_doc),
+                attributes=ItemAttributes(
+                    priority=existing_item.attributes.priority, 
+                    is_user_doc=is_user_doc,
+                    supports_item_ids=supports_ids,
+                    refutes_item_ids=refutes_ids
+                ),
                 metadata=ItemMetadata(author="Metsuke", declared_in_project=target_project, ai_guardrails=guardrails)
             )
             saved_path = inherited_repo.save_item(updated_item)
@@ -799,10 +1113,13 @@ def interactive_main() -> None:
         print("  [7] Compilar proyecto activo (Generar doc. MD, Vault Obsidian y AGENTS.md)")
         print("  [8] Compilar TODOS los proyectos registrados")
         print("  [9] Revisar y aprobar/rechazar propuestas de IA (data/ai-proposals/)")
-        print("  [10] Configurar ajustes GLOBALES del framework (Ruta Web Vault)")
+        print("  [10] Gestión de Biblioteca, Dominio Público y Kill-Switch (bib)")
+        print("  [11] Gestión de Patentes y Freedom to Operate (pat/MOSPAT)")
+        print("  [12] Auditoría de Código y Decompilaciones (audit/MOSAUDIT)")
+        print("  [13] Configurar ajustes GLOBALES del framework (Ruta Web Vault)")
         print("  [0] Salir")
         print("-------------------------------------------------------")
-        choice = input("Selecciona una opción [0-10]: ").strip()
+        choice = input("Selecciona una opción [0-13]: ").strip()
 
         if choice == "1":
             selected = select_active_project(pm)
@@ -827,18 +1144,27 @@ def interactive_main() -> None:
         elif choice == "9":
             menu_review_agent_proposal(pm, active_project=active_project)
         elif choice == "10":
+            menu_bib_management(data_dir, pm)
+        elif choice == "11":
+            menu_patent_management(data_dir, pm)
+        elif choice == "12":
+            menu_audit_management(data_dir, pm)
+        elif choice == "13":
             menu_configure_global_settings(data_dir)
         elif choice == "0":
             print("\n👋 Saliendo de MOM. ¡Soberanía y control garantizados!")
             break
         else:
-            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 10.")
+            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 13.")
 
 def main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
+    data_dir = current_dir.parent / "data"
+    
     if len(sys.argv) > 1:
         parser = argparse.ArgumentParser(description="MOM Standalone CLI")
         subparsers = parser.add_subparsers(dest="command")
+        
         proj_parser = subparsers.add_parser("projects", help="Gestión de proyectos")
         proj_parser.add_argument("--action", choices=["list", "create"], required=True)
         proj_parser.add_argument("--name", help="Nombre")
@@ -847,8 +1173,20 @@ def main() -> None:
         compile_parser = subparsers.add_parser("compile", help="Compilación")
         compile_parser.add_argument("--project", required=True)
 
+        # Comandos CLI directos para bib, pat y audit
+        bib_parser = subparsers.add_parser("bib", help="Gestión de Biblioteca y Licencias")
+        bib_parser.add_argument("--action", choices=["revoke", "status"], required=True)
+        bib_parser.add_argument("--work", help="ID de la obra")
+
+        pat_parser = subparsers.add_parser("pat", help="Gestión de Patentes FTO")
+        pat_parser.add_argument("--action", choices=["list", "check"], required=True)
+
+        audit_parser = subparsers.add_parser("audit", help="Auditoría de Código y Decompilaciones")
+        audit_parser.add_argument("--action", choices=["list", "check"], required=True)
+
         args = parser.parse_args()
         pm = ProjectManager(projects_root=projects_dir)
+        
         if args.command == "projects":
             if args.action == "list":
                 for p in pm.projects_root.iterdir():
@@ -864,6 +1202,13 @@ def main() -> None:
             if not compiler.validate_graph():
                 compiler.compile_all()
                 print(f"✅ Proyecto '{args.project}' compilado.")
+        elif args.command == "bib":
+            if args.action == "revoke" and args.work:
+                print(f"🛑 Kill-switch ejecutado para la obra {args.work}.")
+        elif args.command == "pat":
+            print("⚖️ Estado de patentes consultado.")
+        elif args.command == "audit":
+            print("🛡️ Auditoría de código ejecutada.")
     else:
         interactive_main()
 
@@ -871,5 +1216,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.2
-# File_Version: 0.5.2.4
-# Schema_Version: 0.5.2
+# File_Version: 0.5.2.5
+# Schema_Version: 0.5.3

@@ -1,0 +1,9 @@
+{
+  "project_id": "MOSPAT",
+  "name": "MetsuOS Patent & Intellectual Property Compliance Standard",
+  "phase": "COR",
+  "parents": [],
+  "is_private": false,
+  "is_mandatory": false,
+  "description": "Pilar de análisis de patentes, restricciones territoriales (FTO) e inyección de AI Guardrails para evitar infracciones de propiedad intelectual."
+}

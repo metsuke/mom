@@ -1,0 +1,9 @@
+{
+  "project_id": "AUTHOR-W3C",
+  "name": "World Wide Web Consortium (W3C) Bibliographic Corpus",
+  "phase": "COR",
+  "parents": ["MOSAUTHOR"],
+  "is_private": false,
+  "is_mandatory": false,
+  "description": "Pilar de autor correspondiente al World Wide Web Consortium (W3C), contenedor del árbol de especificaciones y estándares web."
+}
