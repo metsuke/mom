@@ -231,6 +231,9 @@ node_modules/
 .obsidian/plugins/
 .obsidian/cache/
 
-# Version: 0.2.2
-# Biblioteca privada e inmutable (Fuentes Raw)
+# Version: 0.2.2 Biblioteca privada e inmutable (Fuentes Raw)
+# Vault local de archivos fuente y biblioteca (NUNCA se rastrea en Git)
 data/library/
+
+# Propuestas temporales de IA pendientes de aprobación
+data/ai-proposals/*.json
