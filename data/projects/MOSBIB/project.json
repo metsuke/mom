@@ -1,0 +1,12 @@
+{
+  "project_id": "MOSBIB",
+  "name": "Pilar Global de Bibliografía",
+  "phase": "COR",
+  "parents": [
+    "AUTHOR-ESA-PSS05"
+  ],
+  "is_private": false,
+  "mandatory": false,
+  "description": "Pilar herencial de obras y fuentes bibliográficas",
+  "schema_version": "0.5.3"
+}

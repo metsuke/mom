@@ -215,6 +215,51 @@ class MOMMultilingualIngestionAgent:
         self.library_dir.mkdir(parents=True, exist_ok=True)
         self.proposals_dir.mkdir(parents=True, exist_ok=True)
 
+    def ingest_registered_work(self, work_dir: Path) -> Dict[str, Any]:
+        """Ejecuta el troceo agéntico directamente leyendo la carpeta de una obra ya registrada por la CLI."""
+        meta_file = work_dir / "metadata.json"
+        if not meta_file.exists():
+            raise FileNotFoundError(f"❌ No se encontró metadata.json en {work_dir}")
+
+        with open(meta_file, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+        raw_dir = work_dir / "raw"
+        raw_files = list(raw_dir.glob("*")) if raw_dir.exists() else []
+
+        orig_file = None
+        trans_file = None
+
+        for rf in raw_files:
+            if rf.name.startswith("original_"):
+                orig_file = rf
+            elif rf.name.startswith("translation_"):
+                trans_file = rf
+
+        if not orig_file and raw_files:
+            orig_file = raw_files[0]
+
+        if not orig_file:
+            raise FileNotFoundError(f"❌ No hay ningún archivo fuente en la carpeta RAW de {work_dir}")
+
+        print(f"\n🚀 Iniciando troceo agéntico para la obra registrada '{meta.get('work_id')}'...")
+        print(f"  • Archivo Original: {orig_file.name}")
+        if trans_file:
+            print(f"  • Archivo Traducción: {trans_file.name}")
+
+        return self.ingest_work(
+            original_file=orig_file,
+            translation_file=trans_file,
+            author_id=meta.get("author_id"),
+            translator_author_id=None,
+            work_code=meta.get("work_id"),
+            title=meta.get("title", meta.get("work_id")),
+            publisher=meta.get("publisher", "Desconocido"),
+            year=meta.get("year", 2026),
+            license_type=meta.get("license_type", "Copyright"),
+            allow_public_export=meta.get("allow_full_text_export", False)
+        )
+
     def ingest_work(
         self,
         original_file: Path,
@@ -247,7 +292,8 @@ class MOMMultilingualIngestionAgent:
 
         # 1. Copiar archivo original
         dest_orig = raw_bib_dir / f"original_{original_file.name}"
-        shutil.copy(original_file, dest_orig)
+        if original_file.resolve() != dest_orig.resolve():
+            shutil.copy(original_file, dest_orig)
         sha256_orig = calculate_sha256(dest_orig)
 
         # 2. Copiar archivo de traducción si existe
@@ -255,7 +301,8 @@ class MOMMultilingualIngestionAgent:
         sha256_trans = None
         if translation_file and translation_file.exists():
             dest_trans = raw_bib_dir / f"translation_{translation_file.name}"
-            shutil.copy(translation_file, dest_trans)
+            if translation_file.resolve() != dest_trans.resolve():
+                shutil.copy(translation_file, dest_trans)
             sha256_trans = calculate_sha256(dest_trans)
 
         # 3. Inicializar Proyectos y Jerarquía Herencial
@@ -328,6 +375,18 @@ class MOMMultilingualIngestionAgent:
                 json.dump(proposal_data, f, indent=2, ensure_ascii=False)
             generated_proposals += 1
 
+        print("\n=======================================================")
+        print(" 🤖 RESULTADO DE INGESTA MULTILINGÜE SOBERANA")
+        print("=======================================================")
+        print(f"  • Proyecto Obra Despiece:    {work_project_id}")
+        print(f"  • Proyecto Fuente RAW:       {raw_project_id}")
+        print(f"  • SHA-256 Fuente Original:   {sha256_orig}")
+        print(f"  • SHA-256 Traducción Origen: {sha256_trans or 'Sin traducción de origen'}")
+        print(f"  • Total Nodos Extraídos:     {len(orig_nodes)}")
+        print(f"  • Referencias Bibliográficas: {len(orig_refs)}")
+        print(f"  • Propuestas Generadas:      {generated_proposals} en 'data/ai-proposals/'")
+        print("=======================================================")
+
         return {
             "work_project_id": work_project_id,
             "raw_project_id": raw_project_id,
@@ -367,18 +426,6 @@ def main():
         license_type=args.license,
         allow_public_export=args.public
     )
-
-    print("\n=======================================================")
-    print(" 🤖 RESULTADO DE INGESTA MULTILINGÜE SOBERANA")
-    print("=======================================================")
-    print(f"  • Proyecto Obra Despiece:    {res['work_project_id']}")
-    print(f"  • Proyecto Fuente RAW:       {res['raw_project_id']}")
-    print(f"  • SHA-256 Fuente Original:   {res['sha256_original']}")
-    print(f"  • SHA-256 Traducción Origen: {res['sha256_translation'] or 'Sin traducción de origen'}")
-    print(f"  • Total Nodos Extraídos:     {res['total_items']}")
-    print(f"  • Referencias Bibliográficas: {res['total_references']}")
-    print(f"  • Propuestas Generadas:      {res['proposals_generated']} en 'data/ai-proposals/'")
-    print("=======================================================")
 
 if __name__ == "__main__":
     main()

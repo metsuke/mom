@@ -1,0 +1,12 @@
+{
+  "project_id": "AUTHOR-ESA-PSS05",
+  "name": "ESA software engineering standards Issue 2",
+  "phase": "COR",
+  "parents": [
+    "AUTHOR-ESA-PSS05-RAW"
+  ],
+  "is_private": false,
+  "mandatory": false,
+  "description": "Despiece atómico de ESA software engineering standards Issue 2",
+  "schema_version": "0.5.3"
+}

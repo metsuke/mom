@@ -192,11 +192,12 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     print("=======================================================")
     print("  [1] Inicializar Nodo Autor Consolidador (ej. AUTHOR-W3C)")
     print("  [2] Registrar OBRA FORMAL Y MATRIZ RAW (ej. AUTHOR-W3C-WCAG22)")
-    print("  [3] Ejecutar Kill-Switch / Revocación de Cita Literal")
+    print("  [3] Ejecutar TROCEO AGÉNTICO sobre una Obra Registrada")
+    print("  [4] Ejecutar Kill-Switch / Revocación de Cita Literal")
     print("  [0] Volver al Menú Principal")
     print("-------------------------------------------------------")
 
-    opt = input("Selecciona una opción [0-3]: ").strip()
+    opt = input("Selecciona una opción [0-4]: ").strip()
 
     if opt == "1":
         author_id = input("ID del Autor Consolidador (ej. AUTHOR-W3C): ").strip().upper()
@@ -291,7 +292,43 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         print(f"✅ OBRA DESPIECE CREADA: '{work_project_id}' (Hereda de '{raw_project_id}')")
         print(f"✅ JERARQUÍA CONSOLIDADA: {work_project_id} ➔ MOSBIB & {parent_author_id} ➔ MOSAUTHOR")
 
+        if raw_file_str and ask_confirmation("¿Deseas lanzar el TROCEO AGÉNTICO inmediatamente para esta obra?"):
+            from ingest_agent import MOMMultilingualIngestionAgent
+            agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
+            agent.ingest_registered_work(work_dir)
+
     elif opt == "3":
+        print("\n--- 🤖 SELECCIONAR OBRA REGISTRADA PARA TROCEO AGÉNTICO ---")
+        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+        registered_works = []
+
+        for ad in author_dirs:
+            for wd in ad.iterdir():
+                if wd.is_dir() and (wd / "metadata.json").exists():
+                    registered_works.append(wd)
+
+        if not registered_works:
+            print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+            return
+
+        print("Obras disponibles para troceo:")
+        for i, wd in enumerate(registered_works, 1):
+            with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+
+        try:
+            w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+            target_work_dir = registered_works[w_idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            return
+
+        from ingest_agent import MOMMultilingualIngestionAgent
+        agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
+        agent.ingest_registered_work(target_work_dir)
+
+    elif opt == "4":
         print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
         author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
         all_works = []

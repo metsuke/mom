@@ -1,0 +1,14 @@
+{
+  "project_id": "AUTHOR-ESA",
+  "name": "European Space Agency",
+  "phase": "COR",
+  "parents": [
+    "MOSAUTHOR",
+    "AUTHOR-ESA-PSS05",
+    "MOSBIB"
+  ],
+  "is_private": false,
+  "mandatory": false,
+  "description": "",
+  "schema_version": "0.5.3"
+}

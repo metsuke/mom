@@ -1,4 +1,7 @@
 {
   "web_vault_dir": "/Users/Metsuke/__OBSIDIAN/23-MetsuOS-PublicBrain/PublicBrain",
-  "schema_version": "0.5.2"
+  "schema_version": "0.5.2",
+  "supervisor_name": "Raul Carrillo aka metsuke",
+  "supervisor_email": "metsuke@gmail.com",
+  "supervisor_role": "Lead Audit Supervisor"
 }
