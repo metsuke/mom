@@ -140,7 +140,7 @@ def get_next_auto_id(inherited_repo: MOMInheritedRepository, phase: ESAPhase, pr
     return f"{prefix}-{next_num:03d}"
 
 # ==============================================================================
-# MÓDULOS DE BIBLIOTECA, PATENTES Y AUDITORÍA DE CÓDIGO (Standard Library Only)
+# MÓDULOS DE BIBLIOTECA, PATENTES, AUDITORÍA Y GIT SOBERANO
 # ==============================================================================
 
 def _calculate_sha256(file_path: Path) -> str:
@@ -151,12 +151,63 @@ def _calculate_sha256(file_path: Path) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+def execute_sovereign_git_push(repo_root: Path, commit_msg: str) -> bool:
+    """Ejecuta atómicamente: git add . -> git commit -m ... -> git push origin main --force"""
+    try:
+        print("\n🚀 [GIT SOBERANO] Agregando archivos al índice local...")
+        subprocess.run(["git", "-C", str(repo_root), "add", "."], check=True)
+
+        print(f"📝 [GIT SOBERANO] Creando commit...")
+        res_commit = subprocess.run(["git", "-C", str(repo_root), "commit", "-m", commit_msg], capture_output=True, text=True)
+        if res_commit.returncode != 0 and "nothing to commit" in res_commit.stdout.lower():
+            print("ℹ️ [GIT SOBERANO] No hay cambios pendientes para commit.")
+
+        print("⚡ [GIT SOBERANO] Ejecutando sincronización forzada hacia remoto (git push origin main --force)...")
+        subprocess.run(["git", "-C", str(repo_root), "push", "origin", "main", "--force"], check=True)
+        print("✅ [GIT SOBERANO] Sincronización soberana completada con éxito en remoto.")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ [GIT SOBERANO] Fallo en la ejecución del comando Git: {e}")
+        return False
+
+def menu_git_sovereign_sync() -> None:
+    """Menú de sincronización soberana directa desde la CLI (Soporta entrada multilínea)."""
+    repo_root = current_dir.parent
+    print("\n=======================================================")
+    print(" ⚡ SINCRONIZACIÓN SOBERANA GIT (COMMIT & FORCE PUSH)")
+    print("=======================================================")
+    print("Escribe o pega tu mensaje de commit multilínea.")
+    print("Para FINALIZAR y confirmar, escribe 'END' o 'EOF' en una línea nueva:\n")
+    
+    lines = []
+    while True:
+        try:
+            line = input()
+            if line.strip().upper() in ["END", "EOF"]:
+                break
+            lines.append(line)
+        except EOFError:
+            break
+
+    commit_msg = "\n".join(lines).strip()
+    if not commit_msg:
+        print("❌ El mensaje de commit no puede estar vacío.")
+        return
+
+    print("\n------------------- Mensaje Registrado -------------------")
+    print(commit_msg)
+    print("----------------------------------------------------------\n")
+
+    if ask_confirmation("¿Ejecutar git add . + commit + push --force a main con este mensaje?"):
+        execute_sovereign_git_push(repo_root, commit_msg)
+
 def _untrack_and_purge_private_path(root_dir: Path, relative_path: str) -> None:
     """
     Desindexa la ruta privada del índice de Git y elimina cualquier rastro histórico
     en commits antiguos para garantizar el cumplimiento de derechos de autor.
     """
     clean_path = relative_path.strip("/")
+    purged_any = False
     
     # 1. Eliminar del índice actual de Git (staged/cached)
     try:
@@ -166,6 +217,7 @@ def _untrack_and_purge_private_path(root_dir: Path, relative_path: str) -> None:
             rm_cmd = ["git", "-C", str(root_dir), "rm", "-r", "--cached", clean_path]
             subprocess.run(rm_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print(f"  🧹 [GIT UNTRACK] Sacado del índice de Git: {clean_path}")
+            purged_any = True
     except Exception as e:
         print(f"  ⚠️ Error desindexando '{clean_path}': {e}")
 
@@ -185,8 +237,14 @@ def _untrack_and_purge_private_path(root_dir: Path, relative_path: str) -> None:
                 ]
             subprocess.run(purge_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             print(f"  ✅ [HISTORIAL PURGADO] Erradicado rastro histórico de {clean_path}")
+            purged_any = True
     except Exception as e:
         print(f"  ⚠️ Error purgando historial de '{clean_path}': {e}")
+
+    # 3. Si se desindexó o purgó algo durante el proceso de limpieza, propagar forzadamente al remoto
+    if purged_any:
+        print("  ⚡ [PURGA AUTOMÁTICA] Sincronizando árbol limpio con remoto...")
+        execute_sovereign_git_push(root_dir, f"fix(security): purga soberana de rastro privado de {clean_path}")
 
 def append_to_root_gitignore(repo_root: Path, rule: str) -> None:
     """Añade una regla al .gitignore de la raíz del repositorio si no está presente."""
@@ -362,7 +420,6 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         if raw_file_str:
             raw_path = Path(raw_file_str).expanduser().resolve()
             if raw_path.exists():
-                import shutil
                 dest_file = work_dir / "raw" / raw_path.name
                 shutil.copy(raw_path, dest_file)
                 sha256_str = _calculate_sha256(dest_file)
@@ -479,6 +536,8 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
                     _untrack_and_purge_private_path(repo_root, f"data/projects/{raw_id}/")
 
             print("🛑 Kill-Switch activado. La fuente matriz se ha bloqueado como PRIVADA y se purgará la cita literal.")
+            repo_root = current_dir.parent
+            execute_sovereign_git_push(repo_root, f"fix(security): activado kill-switch soberano para obra {meta.get('work_id')}")
 
 def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión del Pilar MOSPAT y Registro de Patentes (Freedom to Operate - FTO)."""
@@ -617,7 +676,6 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
         if binary_path_str:
             bp = Path(binary_path_str).expanduser().resolve()
             if bp.exists():
-                import shutil
                 dest_bin = app_dir / "decomp" / bp.name
                 shutil.copy(bp, dest_bin)
                 sha256_str = _calculate_sha256(dest_bin)
@@ -1400,9 +1458,10 @@ def interactive_main() -> None:
         print("  [11] Gestión de Patentes y Freedom to Operate (pat/MOSPAT)")
         print("  [12] Auditoría de Código y Decompilaciones (audit/MOSAUDIT)")
         print("  [13] Configurar ajustes GLOBALES y Supervisor Humano a Cargo")
+        print("  [14] ⚡ Sincronización SOBERANA Git (Commit & Push Forzado)")
         print("  [0] Salir")
         print("-------------------------------------------------------")
-        choice = input("Selecciona una opción [0-13]: ").strip()
+        choice = input("Selecciona una opción [0-14]: ").strip()
 
         if choice == "1":
             selected = select_active_project(pm)
@@ -1434,11 +1493,13 @@ def interactive_main() -> None:
             menu_audit_management(data_dir, pm)
         elif choice == "13":
             menu_configure_global_settings(data_dir)
+        elif choice == "14":
+            menu_git_sovereign_sync()
         elif choice == "0":
             print("\n👋 Saliendo de MOM. ¡Soberanía y control garantizados!")
             break
         else:
-            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 13.")
+            print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 14.")
 
 def main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
@@ -1498,5 +1559,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.3
-# File_Version: 0.5.2.11
+# File_Version: 0.5.2.13
 # Schema_Version: 0.5.3
