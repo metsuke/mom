@@ -3,12 +3,12 @@ import json
 import re
 import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from projects import MOMInheritedRepository
 from schemas import ESAPhase, MOMItem, MetsuOSKnowledgeLevel, CURRENT_SCHEMA_VERSION
 
 class MOMCompiler:
-    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local, Vault Global e Integración Web con prefijo MOSDOC-, grafos de entorno directo (padres/hijos) en INDEX de proyectos, migas de pan (breadcrumbs), diagramas Mermaid LR por capas, H1 limpios con sufijo ⚫① y sin duplicidades."""
+    """Compilador de especificaciones atómicas, generador de entregables, Obsidian Vault local, Vault Global e Integración Web con prefijo MOSDOC-, grafos de entorno directo (padres/hijos) en INDEX de proyectos, migas de pan (breadcrumbs), diagramas Mermaid LR por capas divididos (Proyectos vs Bibliografía), H1 limpios con sufijo ⚫① y sin duplicidades."""
     def __init__(self, repo: MOMInheritedRepository, target_docs_dir: Optional[Path] = None) -> None:
         self.repo = repo
         self.project_dir = repo.project_dir
@@ -82,6 +82,112 @@ class MOMCompiler:
 
         return errors
 
+    def _is_bib_project(self, pid: str) -> bool:
+        """Determina si un ID de proyecto forma parte del pilar de Bibliografía, Autores, Patentes o Auditorías."""
+        bib_prefixes = ("AUTHOR-", "PATENT-", "AUDIT-", "MOSBIB", "MOSAUTHOR", "MOSPAT", "MOSAUDIT")
+        return pid.startswith(bib_prefixes)
+
+    def _get_public_projects_dag(self) -> Dict[str, dict]:
+        """Obtiene de forma dinámica el diccionario de proyectos públicos para construir el grafo."""
+        public_projects: Dict[str, dict] = {}
+        if self.projects_dir.exists():
+            for p in self.projects_dir.iterdir():
+                p_json = p / "project.json"
+                if p.is_dir() and p_json.exists():
+                    try:
+                        with open(p_json, "r", encoding="utf-8") as f:
+                            meta = json.load(f)
+                        if not meta.get("is_private", False):
+                            public_projects[p.name] = {
+                                "id": meta.get("project_id", p.name),
+                                "name": meta.get("name", p.name),
+                                "phase": meta.get("phase", "COR"),
+                                "parents": meta.get("parents", []),
+                                "description": meta.get("description", "Sin descripción")
+                            }
+                    except Exception:
+                        pass
+        return public_projects
+
+    def _build_split_global_mermaid_graphs(self, public_projects: Dict[str, dict]) -> Tuple[str, str]:
+        """
+        Genera dos grafos Mermaid independientes:
+        1. Grafo de Arquitectura de Proyectos de Software y Core MOM.
+        2. Grafo del Corpus Bibliográfico, Autores, Patentes y Auditorías.
+        """
+        core_projects = {pid: data for pid, data in public_projects.items() if not self._is_bib_project(pid)}
+        bib_projects = {pid: data for pid, data in public_projects.items() if self._is_bib_project(pid)}
+
+        # --- GRAFO 1: PROYECTOS Y CORE SOFTWARE ---
+        lines_core: List[str] = ["graph LR"]
+        roots_core = [pid for pid, d in core_projects.items() if not [p for p in d["parents"] if p in core_projects]]
+        intermediates_core = [pid for pid, d in core_projects.items() if pid not in roots_core and pid not in ("MOSCOR", "MOM")]
+
+        if roots_core:
+            lines_core.append("    subgraph Capa_Origen [Pilares de Origen y Estándares de Software]")
+            for pid in sorted(roots_core):
+                clean_name = core_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
+                lines_core.append(f'        {pid}["{pid}<br/>{clean_name}"]')
+            lines_core.append("    end\n")
+
+        if intermediates_core:
+            lines_core.append("    subgraph Capa_Intermedia [Consolidación y Contexto de Software]")
+            for pid in sorted(intermediates_core):
+                clean_name = core_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
+                lines_core.append(f'        {pid}["{pid}<br/>{clean_name}"]')
+            lines_core.append("    end\n")
+
+        lines_core.append("    subgraph Capa_Core [Consolidación Core y Metodología Terminal]")
+        if "MOSCOR" in core_projects:
+            c_name = core_projects["MOSCOR"]["name"].replace("(", "- ").replace(")", "").strip()
+            lines_core.append(f'        MOSCOR["MOSCOR<br/>{c_name}"]')
+        if "MOM" in core_projects:
+            m_name = core_projects["MOM"]["name"].replace("(", "- ").replace(")", "").strip()
+            lines_core.append(f'        MOM["MOM<br/>{m_name}"]')
+        lines_core.append("    end\n")
+
+        for pid, data in sorted(core_projects.items()):
+            for parent_id in data["parents"]:
+                if parent_id in core_projects:
+                    lines_core.append(f"    {parent_id} --> {pid}")
+
+        # --- GRAFO 2: CORPUS BIBLIOGRÁFICO Y AUTORES ---
+        lines_bib: List[str] = ["graph LR"]
+        pilares_bib = [pid for pid in ("MOSAUTHOR", "MOSBIB", "MOSPAT", "MOSAUDIT") if pid in bib_projects]
+        autores = [pid for pid in bib_projects.keys() if pid.startswith("AUTHOR-") and len(pid.split("-")) == 2]
+        obras_y_pat = [pid for pid in bib_projects.keys() if pid not in pilares_bib and pid not in autores]
+
+        if pilares_bib:
+            lines_bib.append("    subgraph Capa_Pilares [Nodos Doctrinares de Autoridad y Dominio Público]")
+            for pid in sorted(pilares_bib):
+                clean_name = bib_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
+                lines_bib.append(f'        {pid}["{pid}<br/>{clean_name}"]')
+            lines_bib.append("    end\n")
+
+        if autores:
+            lines_bib.append("    subgraph Capa_Autores [Autores Consolidadores]")
+            for pid in sorted(autores):
+                clean_name = bib_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
+                lines_bib.append(f'        {pid}["{pid}<br/>{clean_name}"]')
+            lines_bib.append("    end\n")
+
+        if obras_y_pat:
+            lines_bib.append("    subgraph Capa_Obras [Obras, Patentes y Auditorías]")
+            for pid in sorted(obras_y_pat):
+                clean_name = bib_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
+                lines_bib.append(f'        {pid}["{pid}<br/>{clean_name}"]')
+            lines_bib.append("    end\n")
+
+        for pid, data in sorted(bib_projects.items()):
+            for parent_id in data["parents"]:
+                if parent_id in bib_projects:
+                    lines_bib.append(f"    {parent_id} --> {pid}")
+
+        graph_core_str = "\n".join(lines_core) if len(lines_core) > 1 else "graph LR\n    Sin_Proyectos_Software[\"Sin Proyectos de Software Registrados\"]"
+        graph_bib_str = "\n".join(lines_bib) if len(lines_bib) > 1 else "graph LR\n    Sin_Corpus_Bib[\"Sin Corpus Bibliográfico Registrado\"]"
+
+        return graph_core_str, graph_bib_str
+
     def _build_item_mermaid_local(self, item: MOMItem) -> str:
         """Genera un diagrama Mermaid local centrado en el elemento, mostrando sus padres e hijos inmediatos."""
         lines = ["```mermaid", "graph LR"]
@@ -128,17 +234,14 @@ class MOMCompiler:
 
         mermaid_lines: List[str] = ["```mermaid", "graph LR"]
 
-        # Declaración del proyecto objetivo
         clean_target_name = target_data["name"].replace("(", "- ").replace(")", "").strip()
         mermaid_lines.append(f'    {target_pid}["<b>{target_pid}</b><br/>{clean_target_name}"]')
 
-        # Padres directos
         for pid in sorted(parents):
             if pid in public_projects:
                 clean_pname = public_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
                 mermaid_lines.append(f'    {pid}["<b>{pid}</b><br/>{clean_pname}"] --> {target_pid}')
 
-        # Hijos directos
         for cid in sorted(children):
             clean_cname = public_projects[cid]["name"].replace("(", "- ").replace(")", "").strip()
             mermaid_lines.append(f'    {target_pid} --> {cid}["<b>{cid}</b><br/>{clean_cname}"]')
@@ -199,7 +302,6 @@ class MOMCompiler:
         self.vault_out.mkdir(parents=True, exist_ok=True)
 
         all_items = self.repo.list_all_consolidated()
-        
         self._resolve_bidirectional_relationships(all_items)
 
         for item in all_items.values():
@@ -259,7 +361,6 @@ schema_version: "{item.schema_version}"
             with open(note_file, "w", encoding="utf-8") as f:
                 f.write(file_content)
 
-        # Generar INDEX.md del proyecto con su grafo local de padres e hijos inmediatos
         public_projects = self._get_public_projects_dag()
         proj_mermaid = self._build_project_local_mermaid_str(self.repo.project_name, public_projects)
 
@@ -302,97 +403,55 @@ schema_version: "{item.schema_version}"
         self._generate_global_vault_index()
         self._update_root_readme_graph()
 
-        # Exportar el Vault Global completo a la carpeta plana web si está configurada
         self._export_to_flat_web_vault()
 
-    def _get_public_projects_dag(self) -> Dict[str, dict]:
-        """Obtiene de forma dinámica el diccionario de proyectos públicos para construir el grafo."""
-        public_projects: Dict[str, dict] = {}
-        if self.projects_dir.exists():
-            for p in self.projects_dir.iterdir():
-                p_json = p / "project.json"
-                if p.is_dir() and p_json.exists():
-                    try:
-                        with open(p_json, "r", encoding="utf-8") as f:
-                            meta = json.load(f)
-                        if not meta.get("is_private", False):
-                            public_projects[p.name] = {
-                                "id": meta.get("project_id", p.name),
-                                "name": meta.get("name", p.name),
-                                "phase": meta.get("phase", "COR"),
-                                "parents": meta.get("parents", []),
-                                "description": meta.get("description", "Sin descripción")
-                            }
-                    except Exception:
-                        pass
-        return public_projects
-
-    def _build_global_mermaid_str(self, public_projects: Dict[str, dict]) -> str:
-        """Genera subgrafos en orientación horizontal (LR) organizados por capas de herencia para evitar compresión visual."""
-        mermaid_lines: List[str] = ["graph LR"]
-        
-        roots = [pid for pid, d in public_projects.items() if not d["parents"]]
-        intermediates = [pid for pid, d in public_projects.items() if d["parents"] and pid not in ("MOSCOR", "MOM")]
-        
-        mermaid_lines.append("    subgraph Capa_Origen [Pilares de Origen y Estándares]")
-        for pid in sorted(roots):
-            clean_name = public_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
-            mermaid_lines.append(f'        {pid}["{pid}<br/>{clean_name}"]')
-        mermaid_lines.append("    end\n")
-
-        if intermediates:
-            mermaid_lines.append("    subgraph Capa_Intermedia [Consolidación Estándar y Contexto]")
-            for pid in sorted(intermediates):
-                clean_name = public_projects[pid]["name"].replace("(", "- ").replace(")", "").strip()
-                mermaid_lines.append(f'        {pid}["{pid}<br/>{clean_name}"]')
-            mermaid_lines.append("    end\n")
-
-        mermaid_lines.append("    subgraph Capa_Core [Consolidación Core y Metodología Terminal]")
-        if "MOSCOR" in public_projects:
-            c_name = public_projects["MOSCOR"]["name"].replace("(", "- ").replace(")", "").strip()
-            mermaid_lines.append(f'        MOSCOR["MOSCOR<br/>{c_name}"]')
-        if "MOM" in public_projects:
-            m_name = public_projects["MOM"]["name"].replace("(", "- ").replace(")", "").strip()
-            mermaid_lines.append(f'        MOM["MOM<br/>{m_name}"]')
-        mermaid_lines.append("    end\n")
-
-        for pid, data in sorted(public_projects.items()):
-            for parent_id in data["parents"]:
-                if parent_id in public_projects:
-                    mermaid_lines.append(f"    {parent_id} --> {pid}")
-
-        return "\n".join(mermaid_lines)
-
     def _generate_global_vault_index(self) -> None:
-        """Genera el INDEX.md raíz de data/vault/ con grafo Mermaid y leyenda ordenada alfabéticamente."""
+        """Genera el INDEX.md raíz de data/vault/ con dos grafos Mermaid independientes y leyendas separadas."""
         public_projects = self._get_public_projects_dag()
-        mermaid_str = self._build_global_mermaid_str(public_projects)
+        graph_core_str, graph_bib_str = self._build_split_global_mermaid_graphs(public_projects)
 
-        legend_lines: List[str] = []
-        for pid in sorted(public_projects.keys()):
+        # Leyenda Proyectos de Software
+        core_legend: List[str] = []
+        for pid in sorted([p for p in public_projects.keys() if not self._is_bib_project(p)]):
             data = public_projects[pid]
-            desc_str = f" - {data['description']}" if data['description'] else ""
-            legend_lines.append(f"1. **[[{pid}/INDEX|{pid}]]**: {data['name']} (`Fase {data['phase']}`){desc_str}")
+            desc = f" - {data['description']}" if data['description'] else ""
+            core_legend.append(f"1. **[[{pid}/INDEX|{pid}]]**: {data['name']} (`Fase {data['phase']}`){desc}")
 
-        legend_str = "\n".join(legend_lines) if legend_lines else "*(No hay proyectos públicos registrados)*"
+        # Leyenda Corpus Bibliográfico
+        bib_legend: List[str] = []
+        for pid in sorted([p for p in public_projects.keys() if self._is_bib_project(p)]):
+            data = public_projects[pid]
+            desc = f" - {data['description']}" if data['description'] else ""
+            bib_legend.append(f"1. **[[{pid}/INDEX|{pid}]]**: {data['name']}{desc}")
+
+        core_legend_str = "\n".join(core_legend) if core_legend else "*(No hay proyectos de software registrados)*"
+        bib_legend_str = "\n".join(bib_legend) if bib_legend else "*(No hay fuentes bibliográficas registradas)*"
 
         global_index_content = f"""# METSUOS METHODOLOGY (MOM) - VAULT GLOBAL DE CONOCIMIENTO ⚫①
 
-> **Visión Holística del Sistema:** Este Vault consolida todos los proyectos públicos de MetsuOS y resuelve el grafo DAG de herencia de conocimiento y especificaciones atómicas.
+> **Visión Holística del Sistema:** Este Vault consolida todos los proyectos públicos de MetsuOS y resuelve el grafo DAG de herencia de conocimiento y especificaciones atómicas dividiendo la arquitectura de software del corpus bibliográfico.
 
 ---
 
-## 🌳 Grafo de Jerarquía de Proyectos por Capas
+## 🏛️ 1. Arquitectura de Proyectos de Software y Core MOM
 
 ```mermaid
-{mermaid_str}
+{graph_core_str}
 ```
+
+### 📋 Leyenda y Enlaces de Proyectos Core
+{core_legend_str}
 
 ---
 
-## 📋 Leyenda y Accesos Directos a Proyectos
+## 📚 2. Corpus Bibliográfico, Autores, Patentes y Dominio Público
 
-{legend_str}
+```mermaid
+{graph_bib_str}
+```
+
+### 📋 Leyenda y Enlaces de Fuentes Bibliográficas
+{bib_legend_str}
 
 ---
 *Última compilación global realizada por el proyecto: `{self.repo.project_name}`*
@@ -402,20 +461,39 @@ schema_version: "{item.schema_version}"
             f.write(global_index_content)
 
     def _update_root_readme_graph(self) -> None:
-        """Genera el README.md principal en la raíz real del repositorio MOM leyendo README.md.template e inyectando el grafo Mermaid."""
+        """Genera el README.md principal en la raíz real del repositorio MOM inyectando los grafos divididos."""
         readme_path = self.root_dir / "README.md"
         public_projects = self._get_public_projects_dag()
-        mermaid_str = self._build_global_mermaid_str(public_projects)
+        graph_core_str, graph_bib_str = self._build_split_global_mermaid_graphs(public_projects)
 
         readme_template = self._get_template_content("README.md.template")
         if not readme_template:
-            readme_template = "# MOM — MetsuOS Methodology Framework\n\n## 🌳 Jerarquía de Proyectos MetsuOS\n\n```mermaid\n{{MOM_PROJECTS_GRAPH}}\n```\n"
+            readme_template = """# MOM — MetsuOS Methodology Framework
 
-        readme_rendered = readme_template.replace("{{MOM_PROJECTS_GRAPH}}", mermaid_str)
+## 🏛️ Jerarquía de Arquitectura y Proyectos de Software
+
+```mermaid
+{{MOM_PROJECTS_GRAPH}}
+```
+
+---
+
+## 📚 Corpus Bibliográfico, Autores y Dominio Público
+
+```mermaid
+{{MOM_BIBLIOGRAPHY_GRAPH}}
+```
+"""
+
+        readme_rendered = (
+            readme_template
+            .replace("{{MOM_PROJECTS_GRAPH}}", graph_core_str)
+            .replace("{{MOM_BIBLIOGRAPHY_GRAPH}}", graph_bib_str)
+        )
 
         with open(readme_path, "w", encoding="utf-8") as f:
             f.write(readme_rendered)
-        
+
         residual_data_readme = self.data_dir / "README.md"
         if residual_data_readme.exists() and residual_data_readme.resolve() != readme_path.resolve():
             try:
@@ -423,7 +501,7 @@ schema_version: "{item.schema_version}"
             except Exception:
                 pass
 
-        print(f"✅ [README] Generado e inyectado grafo dinámico en la raíz del proyecto: {readme_path}")
+        print(f"✅ [README] Inyectados grafos divididos (Software vs Bibliografía) en: {readme_path}")
 
     def _export_to_flat_web_vault(self) -> None:
         """Exporta TODO el Vault Global a la carpeta web con migas de pan (breadcrumbs) de navegación, metadatos estrictos, H1 limpios con sufijo ⚫① y sin H1 duplicados."""
@@ -527,7 +605,6 @@ nav_secondary: {tags_block}
                 all_items = proj_repo.list_all_consolidated()
                 self._resolve_bidirectional_relationships(all_items)
 
-                # 1. Notas Atómicas
                 for item in all_items.values():
                     phase_val = item.phase.value.lower() if hasattr(item.phase, 'value') else str(item.phase).lower()
                     attr = item.attributes
@@ -563,7 +640,6 @@ nav_secondary: {tags_block}
 
                     h1_title = clean_h1_title(f"{item.id}: {item.title}")
 
-                    # Migas de Pan (Breadcrumbs) para Nota Atómica
                     breadcrumbs = f"[[MOSDOC-INDEX|🌐 Vault Global]] | [[MOSDOC-{proj_name}-INDEX|📁 Proyecto {proj_name}]] | [[MOSDOC-{proj_name}-{phase_val.upper()}|📄 Fase {phase_val.upper()}]]"
 
                     metadata_table = f"""| Metadato | Valor |
@@ -606,7 +682,6 @@ nav_secondary: {tags_block}
                         f.write(file_content)
                     updated_count += 1
 
-                # 2. Documentos de Fase por Proyecto
                 proj_doc_dir = proj_folder / "doc"
                 proj_vault_dir = proj_folder / "vault"
 
@@ -621,7 +696,6 @@ nav_secondary: {tags_block}
                         
                         h1_title = clean_h1_title(f"Documento Fase {phase.value.upper()} - {proj_name}")
 
-                        # Migas de Pan (Breadcrumbs) para Documento de Fase
                         breadcrumbs = f"[[MOSDOC-INDEX|🌐 Vault Global]] | [[MOSDOC-{proj_name}-INDEX|📁 Proyecto {proj_name}]]"
 
                         doc_table = f"""| Metadato | Valor |
@@ -647,7 +721,6 @@ nav_secondary: {tags_block}
                             f.write(file_content)
                         updated_count += 1
 
-                # 3. Documentos VISION, AGENTS e INDEX por Proyecto
                 for doc_name, doc_type in [("VISION", "vision-doc"), ("AGENTS", "agents-context"), ("INDEX", "project-index")]:
                     if doc_name == "AGENTS":
                         src_file = proj_folder / "AGENTS.md"
@@ -662,11 +735,9 @@ nav_secondary: {tags_block}
 
                         clean_body = strip_existing_h1(rewrite_wikilinks(raw_content, current_proj_context=proj_name))
                         
-                        # Inyectar el grafo dinámico exclusivo de padres/hijos para el INDEX del Proyecto
                         if doc_name == "INDEX":
                             proj_local_mermaid = self._build_project_local_mermaid_str(proj_name, public_projects)
                             if "## Grafo de Entorno Directo de Herencia" in clean_body:
-                                # Reemplazar el bloque si ya existe
                                 clean_body = re.sub(r'```mermaid[\s\S]*?```', proj_local_mermaid.replace("```mermaid\n", "").replace("\n```", ""), clean_body)
                             else:
                                 clean_body = f"## 🌳 Grafo de Entorno Directo de Herencia (Padres e Hijos Inmediatos)\n\n{proj_local_mermaid}\n\n---\n\n{clean_body}"
@@ -675,7 +746,6 @@ nav_secondary: {tags_block}
                         
                         h1_title = clean_h1_title(f"{doc_name} - {proj_name}")
 
-                        # Migas de Pan (Breadcrumbs) para Documentos del Proyecto
                         if doc_name == "INDEX":
                             breadcrumbs = f"[[MOSDOC-INDEX|🌐 Vault Global]]"
                         else:
@@ -703,7 +773,6 @@ nav_secondary: {tags_block}
                             f.write(file_content)
                         updated_count += 1
 
-        # 4. INDEX Global Raíz
         global_index_src = self.global_vault_dir / "INDEX.md"
         if global_index_src.exists():
             with open(global_index_src, "r", encoding="utf-8") as f:
@@ -733,11 +802,7 @@ nav_secondary: {tags_block}
                 f.write(file_content)
             updated_count += 1
 
-        print(f"✅ [WEB VAULT] Sincronización completa del Vault Global finalizada ({updated_count} archivos exportados con Grafos Locales por Proyecto y Breadcrumbs).")
-        print("--------------------------------------------------------------------------------")
-        print(f"📌 Punto de Entrada Web (Índice Global): MOSDOC-INDEX.md")
-        print(f"   Ruta relativa de enlace en tu web: [[MOSDOC-INDEX]]")
-        print("--------------------------------------------------------------------------------\n")
+        print(f"✅ [WEB VAULT] Sincronización completa del Vault Global finalizada ({updated_count} archivos exportados con Grafos Divididos por Dominio).")
 
     def compile_all(self) -> None:
         """Genera todos los entregables usando plantillas de contexto + volcado atómico."""
@@ -747,7 +812,6 @@ nav_secondary: {tags_block}
         
         self._resolve_bidirectional_relationships(all_items)
 
-        # 1. Compilar VISION.md
         philosophy_file = self.project_dir / "VISION_PHILOSOPHY.md"
         if philosophy_file.exists():
             with open(philosophy_file, "r", encoding="utf-8") as f:
@@ -775,7 +839,6 @@ nav_secondary: {tags_block}
         with open(self.doc_out / "VISION.md", "w", encoding="utf-8") as f:
             f.write(vision_rendered)
 
-        # 2. Compilar documentos por fase ESA
         for phase in ESAPhase:
             phase_items = [
                 i for i in all_items.values() 
@@ -806,7 +869,6 @@ nav_secondary: {tags_block}
             with open(self.doc_out / f"{phase.value.upper()}.md", "w", encoding="utf-8") as f:
                 f.write(doc_content)
 
-        # 3. Compilar AGENTS.md
         guardrail_items = [i for i in all_items.values() if i.metadata and i.metadata.ai_guardrails]
         blocks = [f"### Componente `{i.id}` ({i.title}) - Origen: `{i.metadata.declared_in_project or self.repo.project_name}`\n> 🛑 **Guardrail Inmutable:** {i.metadata.ai_guardrails}\n" for i in guardrail_items]
         agents_content = f"# AGENTS.md - Contexto de Onboarding e Instrucciones para IA\n**Proyecto:** {proj_display_name} | **Esquema:** v{CURRENT_SCHEMA_VERSION}\n\n"
@@ -824,6 +886,6 @@ nav_secondary: {tags_block}
             if self.agents_out.exists():
                 shutil.copy(self.agents_out, self.target_docs_dir / "AGENTS.md")
 
-# Version: 0.5.2
-# File_Version: 0.5.2.34
+# Version: 0.5.3
+# File_Version: 0.5.2.35
 # Schema_Version: 0.5.3

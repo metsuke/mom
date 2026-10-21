@@ -87,18 +87,15 @@ Al ejecutar la compilación (Opción `[7]` para el proyecto activo o `[8]` para 
 
 ```mermaid
 graph LR
-    subgraph Capa_Origen [Pilares de Origen y Estándares]
-        MOSAUDIT["MOSAUDIT<br/>MetsuOS Code Audit, Reverse Engineering & Security Integrity Standard"]
+    subgraph Capa_Origen [Pilares de Origen y Estándares de Software]
+        MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
         MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
         MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
         MOSNATO["MOSNATO<br/>MetsuOS NATO Integration & Doctrine Standard"]
-        MOSPAT["MOSPAT<br/>MetsuOS Patent & Intellectual Property Compliance Standard"]
         MOSPSH["MOSPSH<br/>MetsuOS Psychohistory & Strategic Modeling"]
     end
 
-    subgraph Capa_Intermedia [Consolidación Estándar y Contexto]
-        MOSA11Y["MOSA11Y<br/>MetsuOS Accessibility, Usability & Inclusion Standard"]
-        MOSAUTHOR["MOSAUTHOR<br/>MetsuOS Global Author & Bibliographic Corpus Standard"]
+    subgraph Capa_Intermedia [Consolidación y Contexto de Software]
         MOSCON["MOSCON<br/>MetsuOS Conocimiento - Núcleo y Norma Geopolítica"]
         MOSSTD["MOSSTD<br/>MetsuOS Consolidated Standards"]
     end
