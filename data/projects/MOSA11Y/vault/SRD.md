@@ -34,24 +34,8 @@ Plataformas de ejecución, entornos de soporte y dependencias de infraestructura
 ## 3. ESPECIFICACIONES ATÓMICAS DE REQUISITOS SOFTWARE
 ## 📊 Grafo de Trazabilidad de la Fase
 
-```mermaid
-graph LR
-    SRD-AUTHOR-W3C-001["SRD-AUTHOR-W3C-001"]
-    URD-AUTHOR-W3C-001["URD-AUTHOR-W3C-001"] -.-> SRD-AUTHOR-W3C-001
-```
+*(No hay elementos para representar en el grafo)*
 
 ---
 
-### SRD-AUTHOR-W3C-001: Pauta 1.1: Alternativas de texto
-**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `AUTHOR-W3C`
-
-
-#### Descripción
-Proporcionar alternativas de texto para cualquier contenido no textual.
-
-**Padres:** [[URD-AUTHOR-W3C-001]]
-**Hijos:** [[ADD-AUTHOR-W3C-001]]
-**Apoya a:** [[S]]
-**Refuta a:** [[S]]
-
----
+*(No hay especificaciones atómicas registradas en esta fase)*

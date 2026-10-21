@@ -9,7 +9,6 @@
 ```mermaid
 graph LR
     subgraph Capa_Origen [Pilares de Origen y Estándares]
-        AUTHOR-W3C["AUTHOR-W3C<br/>World Wide Web Consortium"]
         MOSAUDIT["MOSAUDIT<br/>MetsuOS Code Audit, Reverse Engineering & Security Integrity Standard"]
         MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
         MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
@@ -31,8 +30,6 @@ graph LR
     end
 
     MOSCOR --> MOM
-    AUTHOR-W3C --> MOSA11Y
-    AUTHOR-W3C --> MOSAUTHOR
     MOSPSH --> MOSCON
     MOSNATO --> MOSCON
     MOSCPS --> MOSCON
@@ -46,7 +43,6 @@ graph LR
 
 ## 📋 Leyenda y Accesos Directos a Proyectos
 
-1. **[[AUTHOR-W3C/INDEX|AUTHOR-W3C]]**: World Wide Web Consortium (`Fase COR`) - Corpus bibliográfico y estándares web del W3C.
 1. **[[MOM/INDEX|MOM]]**: MetsuOS Methodology Framework (`Fase COR`) - Sin descripción
 1. **[[MOSA11Y/INDEX|MOSA11Y]]**: MetsuOS Accessibility, Usability & Inclusion Standard (`Fase COR`) - Sin descripción
 1. **[[MOSAUDIT/INDEX|MOSAUDIT]]**: MetsuOS Code Audit, Reverse Engineering & Security Integrity Standard (`Fase COR`) - Sin descripción

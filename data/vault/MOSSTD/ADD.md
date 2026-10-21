@@ -25,21 +25,8 @@ Estrategia de modularización, patrones de diseño y gestión de persistencia/re
 ## 2. ESPECIFICACIONES ATÓMICAS DE ARQUITECTURA
 ## 📊 Grafo de Trazabilidad de la Fase
 
-```mermaid
-graph LR
-    ADD-AUTHOR-W3C-001["ADD-AUTHOR-W3C-001"]
-    SRD-AUTHOR-W3C-001["SRD-AUTHOR-W3C-001"] -.-> ADD-AUTHOR-W3C-001
-```
+*(No hay elementos para representar en el grafo)*
 
 ---
 
-### ADD-AUTHOR-W3C-001: Criterio 1.1.1: Contenido no textual (Nivel A)
-**Estado:** `DRAFT` | **Prioridad:** `HIGH` | **Verificación:** `TEST` | **Origen:** `AUTHOR-W3C`
-
-
-#### Descripción
-Todo el contenido no textual que se presenta al usuario tiene una alternativa de texto que sirve para el mismo propósito.
-
-**Padres:** [[SRD-AUTHOR-W3C-001]]
-
----
+*(No hay especificaciones atómicas registradas en esta fase)*

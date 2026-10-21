@@ -88,7 +88,6 @@ Al ejecutar la compilación (Opción `[7]` para el proyecto activo o `[8]` para 
 ```mermaid
 graph LR
     subgraph Capa_Origen [Pilares de Origen y Estándares]
-        AUTHOR-W3C["AUTHOR-W3C<br/>World Wide Web Consortium"]
         MOSAUDIT["MOSAUDIT<br/>MetsuOS Code Audit, Reverse Engineering & Security Integrity Standard"]
         MOSCPS["MOSCPS<br/>MetsuOS Complex Problem Solving Standard"]
         MOSESA["MOSESA<br/>MetsuOS System Architecture & ESA Phases Standard"]
@@ -110,8 +109,6 @@ graph LR
     end
 
     MOSCOR --> MOM
-    AUTHOR-W3C --> MOSA11Y
-    AUTHOR-W3C --> MOSAUTHOR
     MOSPSH --> MOSCON
     MOSNATO --> MOSCON
     MOSCPS --> MOSCON
