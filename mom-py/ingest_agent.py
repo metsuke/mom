@@ -15,6 +15,7 @@ if str(current_dir) not in sys.path:
 
 from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, ItemAttributes, ItemMetadata, CURRENT_SCHEMA_VERSION
+from pdf_parser import MOMPurePDFExtractor
 
 def calculate_sha256(file_path: Path) -> str:
     """Calcula el hash SHA-256 de cualquier archivo para garantizar la cadena de custodia de la fuente matriz."""
@@ -25,29 +26,23 @@ def calculate_sha256(file_path: Path) -> str:
     return sha256_hash.hexdigest()
 
 def extract_text_from_file(file_path: Path) -> str:
-    """Extrae texto plano deterministamente desde archivos .md, .txt o .pdf."""
+    """Extrae texto plano deterministamente desde archivos .md, .txt o .pdf usando el extractor nativo pure-python."""
     ext = file_path.suffix.lower()
     if ext == ".pdf":
         try:
-            import pypdf
-            reader = pypdf.PdfReader(str(file_path))
-            full_text = []
-            for i, page in enumerate(reader.pages, 1):
-                page_text = page.extract_text() or ""
-                full_text.append(f"<!-- PAGE {i} -->\n" + page_text)
-            return "\n".join(full_text)
-        except ImportError:
-            pass
+            extractor = MOMPurePDFExtractor(file_path)
+            extracted = extractor.extract_full_text_with_page_markers()
+            if extracted.strip():
+                return extracted
+        except Exception as e:
+            print(f"⚠️ Extractor PDF nativo reportó advertencia ({e}), intentando fallback de lectura directa...")
 
-        import subprocess
-        try:
-            res = subprocess.run(["pdftotext", str(file_path), "-"], capture_output=True, text=True, check=True)
-            return res.stdout
-        except Exception:
-            raise RuntimeError("❌ Para procesar PDF se requiere 'pypdf' (pip install pypdf) o la utilidad 'pdftotext'.")
-
-    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-        return f.read()
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except UnicodeDecodeError:
+        with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
+            return f.read()
 
 def ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
     """Crea o actualiza el project.json de un nodo en el disco respetando sus padres y visibilidad."""
@@ -431,5 +426,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.3
-# File_Version: 0.5.2.10
+# File_Version: 0.5.2.11
 # Schema_Version: 0.5.3
