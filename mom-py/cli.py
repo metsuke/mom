@@ -527,14 +527,21 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
 # ==============================================================================
 
 def menu_configure_global_settings(data_dir: Path) -> None:
-    """Gestiona la configuración global de MOM almacenada en data/config.json."""
+    """Gestiona la configuración global de MOM almacenada en data/config.json, incluyendo al Supervisor Humano."""
     config_file = data_dir / "config.json"
-    config = {"web_vault_dir": None, "schema_version": CURRENT_SCHEMA_VERSION}
+    config = {
+        "web_vault_dir": None, 
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "supervisor_name": "Humano Supervisor",
+        "supervisor_email": "supervisor@metsuos.org",
+        "supervisor_role": "Lead Audit Supervisor"
+    }
     
     if config_file.exists():
         try:
             with open(config_file, "r", encoding="utf-8") as f:
-                config = json.load(f)
+                loaded = json.load(f)
+                config.update(loaded)
         except Exception:
             pass
 
@@ -542,19 +549,40 @@ def menu_configure_global_settings(data_dir: Path) -> None:
     web_str = current_web if current_web else "🚫 DESACTIVADA (Sin exportación web)"
 
     print("\n=======================================================")
-    print(" ⚙️ CONFIGURACIÓN GLOBAL DEL FRAMEWORK MOM")
+    print(" ⚙️ CONFIGURACIÓN GLOBAL Y SUPERVISOR HUMANO A CARGO")
     print("=======================================================")
     print(f"  • Ruta Web Vault (flat directory): {web_str}")
     print(f"  • Versión del Esquema Global:     v{config.get('schema_version', CURRENT_SCHEMA_VERSION)}")
+    print(f"  • Supervisor Humano a Cargo:      {config.get('supervisor_name')} <{config.get('supervisor_email')}>")
+    print(f"  • Cargo / Rol de Responsabilidad: {config.get('supervisor_role')}")
     print("-------------------------------------------------------")
-    print("  [1] Configurar/Modificar ruta de exportación Web Vault")
-    print("  [2] Desactivar exportación a Web Vault")
+    print("  [1] Configurar/Modificar datos del Supervisor Humano a Cargo")
+    print("  [2] Configurar/Modificar ruta de exportación Web Vault")
+    print("  [3] Desactivar exportación a Web Vault")
     print("  [0] Volver al menú principal")
     print("-------------------------------------------------------")
 
-    opt = input("Selecciona una opción [0-2]: ").strip()
+    opt = input("Selecciona una opción [0-3]: ").strip()
 
     if opt == "1":
+        print("\n--- 👤 DATOS DEL SUPERVISOR HUMANO RESPONSABLE ---")
+        s_name = input(f"Nombre Completo [{config.get('supervisor_name')}]: ").strip()
+        if s_name:
+            config["supervisor_name"] = s_name
+        
+        s_email = input(f"Email de Contacto [{config.get('supervisor_email')}]: ").strip()
+        if s_email:
+            config["supervisor_email"] = s_email
+
+        s_role = input(f"Cargo / Responsabilidad [{config.get('supervisor_role')}]: ").strip()
+        if s_role:
+            config["supervisor_role"] = s_role
+
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2, ensure_ascii=False)
+        print("✅ Configuración del Supervisor Humano actualizada correctamente.")
+
+    elif opt == "2":
         new_path = input("\nIntroduce la ruta absoluta o relativa hacia la carpeta web: ").strip()
         if new_path:
             p = Path(new_path).expanduser().resolve()
@@ -566,7 +594,8 @@ def menu_configure_global_settings(data_dir: Path) -> None:
             with open(config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             print(f"✅ Ruta global de Web Vault configurada en: {p}")
-    elif opt == "2":
+
+    elif opt == "3":
         if ask_confirmation("¿Desactivar la exportación plana a Web Vault?"):
             config["web_vault_dir"] = None
             with open(config_file, "w", encoding="utf-8") as f:
@@ -1236,7 +1265,7 @@ def interactive_main() -> None:
         print("  [10] Gestión de Biblioteca, Dominio Público y Kill-Switch (bib)")
         print("  [11] Gestión de Patentes y Freedom to Operate (pat/MOSPAT)")
         print("  [12] Auditoría de Código y Decompilaciones (audit/MOSAUDIT)")
-        print("  [13] Configurar ajustes GLOBALES del framework (Ruta Web Vault)")
+        print("  [13] Configurar ajustes GLOBALES y Supervisor Humano a Cargo")
         print("  [0] Salir")
         print("-------------------------------------------------------")
         choice = input("Selecciona una opción [0-13]: ").strip()
@@ -1335,5 +1364,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.3
-# File_Version: 0.5.2.9
+# File_Version: 0.5.2.10
 # Schema_Version: 0.5.3
