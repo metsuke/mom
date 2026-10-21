@@ -5,6 +5,8 @@ import curses
 import argparse
 import datetime
 import hashlib
+import subprocess
+import shutil
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -149,8 +151,105 @@ def _calculate_sha256(file_path: Path) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+def _untrack_and_purge_private_path(root_dir: Path, relative_path: str) -> None:
+    """
+    Desindexa la ruta privada del índice de Git y elimina cualquier rastro histórico
+    en commits antiguos para garantizar el cumplimiento de derechos de autor.
+    """
+    clean_path = relative_path.strip("/")
+    
+    # 1. Eliminar del índice actual de Git (staged/cached)
+    try:
+        check_cmd = ["git", "-C", str(root_dir), "ls-files", "--error-unmatch", clean_path]
+        res = subprocess.run(check_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if res.returncode == 0:
+            rm_cmd = ["git", "-C", str(root_dir), "rm", "-r", "--cached", clean_path]
+            subprocess.run(rm_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"  🧹 [GIT UNTRACK] Sacado del índice de Git: {clean_path}")
+    except Exception as e:
+        print(f"  ⚠️ Error desindexando '{clean_path}': {e}")
+
+    # 2. Purgar commits históricos antiguos si existen en el repo
+    try:
+        log_cmd = ["git", "-C", str(root_dir), "log", "-1", "--format=%h", "--", clean_path]
+        res_log = subprocess.run(log_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if res_log.stdout.strip():
+            print(f"  🚨 [PURGA DE HISTORIAL] Rastro detectado en commit {res_log.stdout.strip()}. Purgando historial de Git...")
+            if shutil.which("git-filter-repo"):
+                purge_cmd = ["git", "-C", str(root_dir), "filter-repo", "--invert-paths", "--path", clean_path, "--force"]
+            else:
+                purge_cmd = [
+                    "git", "-C", str(root_dir), "filter-branch", "--force",
+                    "--index-filter", f"git rm -rf --cached --ignore-unmatch {clean_path}",
+                    "--prune-empty", "--tag-name-filter", "cat", "--", "--all"
+                ]
+            subprocess.run(purge_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"  ✅ [HISTORIAL PURGADO] Erradicado rastro histórico de {clean_path}")
+    except Exception as e:
+        print(f"  ⚠️ Error purgando historial de '{clean_path}': {e}")
+
+def append_to_root_gitignore(repo_root: Path, rule: str) -> None:
+    """Añade una regla al .gitignore de la raíz del repositorio si no está presente."""
+    root_gitignore = repo_root / ".gitignore"
+    rule_clean = rule.strip()
+    
+    lines = []
+    if root_gitignore.exists():
+        with open(root_gitignore, "r", encoding="utf-8") as f:
+            lines = [line.strip() for line in f.readlines()]
+            
+    if rule_clean not in lines:
+        with open(root_gitignore, "a", encoding="utf-8") as f:
+            f.write(f"\n{rule_clean}\n")
+
+def refresh_all_gitignores(pm: ProjectManager) -> None:
+    """Recorre todos los proyectos en disco, fuerza el uso del .gitignore de la raíz y limpia rastros de Git."""
+    repo_root = current_dir.parent  # Raíz del repositorio 'mom'
+    
+    # 1. Si existe un data/.gitignore secundario, eliminarlo para evitar conflictos de rutas
+    data_gitignore = repo_root / "data" / ".gitignore"
+    if data_gitignore.exists():
+        try:
+            subprocess.run(["git", "-C", str(repo_root), "rm", "-f", "data/.gitignore"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            data_gitignore.unlink(missing_ok=True)
+            print("  🧹 [GIT CLEAN] Eliminado 'data/.gitignore' duplicado para unificar reglas en la raíz.")
+        except Exception:
+            pass
+
+    if not pm.projects_root.exists():
+        return
+
+    print("\n🔍 Sincronizando políticas de visibilidad y aislando proyectos privados...")
+    
+    # 2. Reglas estáticas en la raíz
+    append_to_root_gitignore(repo_root, "data/library/")
+    append_to_root_gitignore(repo_root, "data/ai-proposals/*.json")
+    
+    _untrack_and_purge_private_path(repo_root, "data/library/")
+    _untrack_and_purge_private_path(repo_root, "data/ai-proposals/")
+
+    # 3. Recorrer proyectos registrados
+    private_count = 0
+    for proj_dir in sorted(pm.projects_root.iterdir()):
+        if proj_dir.is_dir() and (proj_dir / "project.json").exists():
+            try:
+                with open(proj_dir / "project.json", "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                
+                if meta.get("is_private", False):
+                    rel_path = f"data/projects/{proj_dir.name}/"
+                    append_to_root_gitignore(repo_root, rel_path)
+                    _untrack_and_purge_private_path(repo_root, rel_path)
+                    
+                    print(f"  🔒 [PRIVADO PROTEGIDO] Sincronizado en raíz .gitignore: {proj_dir.name}")
+                    private_count += 1
+            except Exception as e:
+                print(f"  ⚠️ Error sincronizando {proj_dir.name}: {e}")
+
+    print(f"✅ Verificación completada ({private_count} proyectos privados verificados y aislados de Git).\n")
+
 def _ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
-    """Crea o actualiza un nodo de proyecto en el disco manteniendo su estructura JSON."""
+    """Crea o actualiza un nodo de proyecto en disco manteniendo su estructura JSON e aislando visibilidad privada."""
     proj_dir = pm.projects_root / proj_id
     proj_dir.mkdir(parents=True, exist_ok=True)
     (proj_dir / "specs").mkdir(exist_ok=True)
@@ -164,6 +263,7 @@ def _ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents:
             if p not in curr_parents:
                 curr_parents.append(p)
         meta["parents"] = curr_parents
+        meta["is_private"] = is_private
     else:
         meta = {
             "project_id": proj_id,
@@ -179,12 +279,16 @@ def _ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents:
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
 
+    if is_private:
+        repo_root = current_dir.parent
+        append_to_root_gitignore(repo_root, f"data/projects/{proj_id}/")
+        _untrack_and_purge_private_path(repo_root, f"data/projects/{proj_id}/")
+
 def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión de la Biblioteca Privada (data/library/bib/) y Corpus Bibliográfico."""
     bib_dir = data_dir / "library" / "bib"
     bib_dir.mkdir(parents=True, exist_ok=True)
 
-    # Asegurar Pilar MOSBIB
     _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [], False, "Pilar herencial de obras y fuentes bibliográficas")
 
     print("\n=======================================================")
@@ -245,18 +349,12 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         raw_file_str = input("Ruta al archivo original completo (opcional, Enter para omitir): ").strip()
         sha256_str = ""
 
-        # 1. PROYECTO NODO MAESTRO / RAW (Origen absoluto)
         _ensure_project_exists(pm, raw_project_id, f"Fuente Matriz RAW: {title}", [], raw_is_private, f"Archivo maestro original de {title}")
-
-        # 2. PROYECTO OBRA DESPIECE ATÓMICO (Hereda de RAW)
         _ensure_project_exists(pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
-
-        # 3. CONFLUENCIA EN MOSBIB Y EN EL AUTOR CONSOLIDADOR
         _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [work_project_id], False, "Pilar herencial de obras")
         _ensure_project_exists(pm, parent_author_id, parent_author_id, [work_project_id, "MOSBIB"], False, "Autor consolidador")
         _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [parent_author_id], False, "Nodo central de herencia")
 
-        # 4. GUARDAR EN BIBLIOTECA PRIVADA
         work_dir = bib_dir / parent_author_id / work_code
         (work_dir / "raw").mkdir(parents=True, exist_ok=True)
         (work_dir / "split").mkdir(parents=True, exist_ok=True)
@@ -376,6 +474,9 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
                     rmeta["is_private"] = True
                     with open(raw_json, "w", encoding="utf-8") as f:
                         json.dump(rmeta, f, indent=2, ensure_ascii=False)
+                    repo_root = current_dir.parent
+                    append_to_root_gitignore(repo_root, f"data/projects/{raw_id}/")
+                    _untrack_and_purge_private_path(repo_root, f"data/projects/{raw_id}/")
 
             print("🛑 Kill-Switch activado. La fuente matriz se ha bloqueado como PRIVADA y se purgará la cita literal.")
 
@@ -384,7 +485,6 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
     pat_dir = data_dir / "library" / "patents"
     pat_dir.mkdir(parents=True, exist_ok=True)
 
-    # Asegurar Pilar MOSPAT
     _ensure_project_exists(pm, "MOSPAT", "Pilar Global de Patentes y FTO", [], False, "Pilar herencial de patentes")
 
     print("\n=======================================================")
@@ -423,17 +523,13 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
         is_expired = datetime.datetime.now().year >= expiry_year
         is_private_raw = ask_confirmation("¿El documento original de patente es de uso privado / restringido?", default=False)
 
-        # 1. MATRIZ RAW Y NODO PATENTE DESPIECE
         _ensure_project_exists(pm, raw_project_id, f"Documento Matriz Patente: {title}", [], is_private_raw, f"Documento original de patente {patent_code}")
         _ensure_project_exists(pm, pat_project_id, f"Patente: {title}", [raw_project_id], False, f"FTO y Claims de {patent_code}")
-
-        # 2. HERENCIA HACIA MOSPAT Y AUTOR
         _ensure_project_exists(pm, "MOSPAT", "Pilar Global de Patentes", [pat_project_id], False, "Pilar herencial de patentes")
         if author_id:
             _ensure_project_exists(pm, author_id, author_id, [pat_project_id, "MOSPAT"], False, "Autor consolidador")
             _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [author_id], False, "Nodo central de herencia")
 
-        # 3. BIBLIOTECA PRIVADA
         p_folder = pat_dir / pat_project_id
         p_folder.mkdir(parents=True, exist_ok=True)
 
@@ -474,7 +570,6 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
     audit_dir = data_dir / "library" / "audit"
     audit_dir.mkdir(parents=True, exist_ok=True)
 
-    # Asegurar Pilar MOSAUDIT
     _ensure_project_exists(pm, "MOSAUDIT", "Pilar Global de Auditoría de Código", [], False, "Pilar herencial de auditorías y decompilados")
 
     print("\n=======================================================")
@@ -507,17 +602,13 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
 
         is_private_raw = ask_confirmation("¿El binario/código decompilado original es de carácter PRIVADO?", default=True)
 
-        # 1. MATRIZ RAW Y DESPIECE AUDITORÍA
         _ensure_project_exists(pm, raw_project_id, f"Binarios / Decompilado RAW: {app_code}", [], is_private_raw, f"Binarios decompilados de {app_code}")
         _ensure_project_exists(pm, audit_project_id, f"Auditoría: {app_code}", [raw_project_id], False, f"Especificación de auditoría de {app_code}")
-
-        # 2. HERENCIA HACIA MOSAUDIT Y AUTOR
         _ensure_project_exists(pm, "MOSAUDIT", "Pilar Global de Auditorías", [audit_project_id], False, "Pilar herencial de auditorías")
         if author_id:
             _ensure_project_exists(pm, author_id, author_id, [audit_project_id, "MOSAUDIT"], False, "Autor consolidador")
             _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [author_id], False, "Nodo central de herencia")
 
-        # 3. BIBLIOTECA PRIVADA
         app_dir = audit_dir / audit_project_id
         (app_dir / "declared").mkdir(parents=True, exist_ok=True)
         (app_dir / "decomp").mkdir(parents=True, exist_ok=True)
@@ -702,8 +793,10 @@ def menu_create_project(pm: ProjectManager) -> Optional[str]:
             with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
                 json.dump(meta, f, indent=2, ensure_ascii=False)
 
-            repo = MOMInheritedRepository(pm.projects_root, project_id)
-            repo.sync_gitignore()
+            repo_root = current_dir.parent
+            if is_private:
+                append_to_root_gitignore(repo_root, f"data/projects/{project_id}/")
+                _untrack_and_purge_private_path(repo_root, f"data/projects/{project_id}/")
 
             print(f"✅ Proyecto '{project_id}' creado con éxito en: {proj_dir}")
             return project_id
@@ -856,9 +949,10 @@ def menu_configure_project(pm: ProjectManager, active_project: Optional[str] = N
         target_str = "🔒 PRIVADO" if target_priv else "🌐 PÚBLICO"
         if ask_confirmation(f"Estado actual es '{priv_str}'. ¿Deseas cambiar la visibilidad a '{target_str}'?"):
             meta["is_private"] = target_priv
-            repo = MOMInheritedRepository(pm.projects_root, target_project)
-            repo.config.is_private = target_priv
-            repo.sync_gitignore()
+            repo_root = current_dir.parent
+            if target_priv:
+                append_to_root_gitignore(repo_root, f"data/projects/{target_project}/")
+                _untrack_and_purge_private_path(repo_root, f"data/projects/{target_project}/")
             print(f"ℹ️ Visibilidad ajustada a: {target_str}")
     elif opt == "3":
         target_mand = not current_mandatory
@@ -1282,6 +1376,9 @@ def interactive_main() -> None:
     data_dir = current_dir.parent / "data"
     pm = ProjectManager(projects_root=projects_dir)
     
+    # Sincronizar automáticamente todos los proyectos privados existentes al arrancar
+    refresh_all_gitignores(pm)
+
     active_project: Optional[str] = "MOSCON" if (projects_dir / "MOSCON").exists() else None
 
     while True:
@@ -1401,5 +1498,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.3
-# File_Version: 0.5.2.10
+# File_Version: 0.5.2.11
 # Schema_Version: 0.5.3

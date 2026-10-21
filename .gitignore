@@ -237,3 +237,5 @@ data/library/
 
 # Propuestas temporales de IA pendientes de aprobación
 data/ai-proposals/*.json
+
+data/projects/AUTHOR-ESA-PSS05-RAW/
