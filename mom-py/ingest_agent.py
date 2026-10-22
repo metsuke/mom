@@ -6,6 +6,7 @@ import datetime
 import hashlib
 import shutil
 import argparse
+import subprocess
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 
@@ -19,7 +20,7 @@ from pdf_parser import MOMPurePDFExtractor
 from ocr_engine import MOMOCREngine
 
 def calculate_sha256(file_path: Path) -> str:
-    """Calcula el hash SHA-256 de cualquier archivo para garantizar la cadena de custodia de la fuente matriz."""
+    """Calcula el hash SHA-256 de cualquier archivo para garantizar la cadena de custodia."""
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
         for byte_block in iter(lambda: f.read(4096), b""):
@@ -27,86 +28,137 @@ def calculate_sha256(file_path: Path) -> str:
     return sha256_hash.hexdigest()
 
 def clean_extracted_line(line_str: str) -> str:
-    """Limpia marcas de agua, pies de página y encabezados ruidosos de repositorios como everyspec."""
+    """Limpia marcas de agua, pies de página y encabezados ruidosos."""
     if "everyspec.com" in line_str.lower():
         return ""
     if re.search(r'downloaded from https?://', line_str, re.IGNORECASE):
         return ""
     return line_str.strip()
 
+def render_progress_bar(current: int, total: int, prefix: str = "", bar_length: int = 30) -> None:
+    """Renderiza una barra de progreso limpia en la terminal."""
+    percent = float(current) / float(total) if total > 0 else 1.0
+    arrow = '█' * int(round(percent * bar_length))
+    spaces = '-' * (bar_length - len(arrow))
+    sys.stdout.write(f"\r{prefix} [{arrow}{spaces}] {int(percent * 100)}% ({current}/{total})")
+    sys.stdout.flush()
+
+def get_total_pdf_pages(pdf_path: Path) -> int:
+    """Obtiene el número total de páginas de un PDF usando pdfinfo si está disponible."""
+    try:
+        res = subprocess.run(["pdfinfo", str(pdf_path)], capture_output=True, text=True, check=True)
+        for line in res.stdout.splitlines():
+            if line.startswith("Pages:"):
+                return int(line.split(":")[1].strip())
+    except Exception:
+        pass
+    return 0
+
 def extract_text_from_file(file_path: Path) -> str:
     """
-    Extrae texto plano deterministamente desde archivos .md, .txt o .pdf.
-    Filtra marcadores de página HTML para evaluar si la capa de texto real es suficiente.
-    Si está vacía o es insuficiente, activa automáticamente el motor OCR (MOMOCREngine).
+    ESTRATEGIA HÍBRIDA MULTI-CAPA ULTRA-VERBOSA CON STREAMING DE PÁRRAFOS Y BARRA DE PROGRESO:
+    Ejecuta siempre la extracción nativa y el OCR página a página, informando en pantalla
+    del progreso en tiempo real y transmitiendo el párrafo que se está construyendo.
     """
     ext = file_path.suffix.lower()
-    raw_text = ""
-    used_ocr = False
-
-    if ext == ".pdf":
-        print(f"📄 Procesando archivo PDF: {file_path.name}")
-        try:
-            extractor = MOMPurePDFExtractor(file_path)
-            extracted = extractor.extract_full_text_with_page_markers()
-            
-            # FILTRADO ESTRICTO: Eliminar comentarios de página HTML para evaluar el contenido real
-            clean_content = re.sub(r'<!--\s*PAGE\s+\d+\s*-->', '', extracted, flags=re.IGNORECASE).strip()
-            
-            print(f"📊 Longitud bruta extraída: {len(extracted)} caracteres. Contenido de texto útil: {len(clean_content)} caracteres.")
-            
-            if len(clean_content) > 100:
-                raw_text = extracted
-                print("✅ Capa de texto nativa detectada y extraída con éxito.")
-            else:
-                print(f"⚠️ Capa de texto vacía o insuficiente ({len(clean_content)} caracteres útiles). Activando fallback a MOMOCREngine...")
-        except Exception as e:
-            print(f"⚠️ Extractor PDF nativo falló ({e}). Activando fallback a MOMOCREngine...")
-
-        # Fallback a OCR casero si no hay texto real utilizable
-        if not raw_text.strip():
-            try:
-                ocr = MOMOCREngine()
-                temp_pgm_dir = file_path.parent / "_temp_pgm"
-                temp_pgm_dir.mkdir(exist_ok=True)
-                
-                print("⚙️ Ejecutando renderizado PGM y OCR página a página...")
-                page_texts = []
-                for p_num in range(1, 500):  # Límite superior de seguridad
-                    try:
-                        pgm_file = ocr.convert_pdf_page_to_pgm(file_path, p_num, temp_pgm_dir)
-                        p_text = ocr.process_pgm_page(pgm_file)
-                        page_texts.append(f"<!-- PAGE {p_num} -->\n{p_text}")
-                        print(f"  • Página {p_num}: {len(p_text)} caracteres reconocidos por OCR.")
-                    except Exception:
-                        break  # Se alcanzaron todas las páginas convertibles
-
-                raw_text = "\n\n".join(page_texts)
-                used_ocr = True
-                print(f"✅ OCR completado. Texto extraído de {len(page_texts)} página(s).")
-
-                # Limpieza de temporales PGM
-                if temp_pgm_dir.exists():
-                    shutil.rmtree(temp_pgm_dir, ignore_errors=True)
-            except Exception as ocr_err:
-                print(f"❌ Error durante la ejecución del OCR: {ocr_err}")
-
-    if not raw_text:
+    
+    if ext != ".pdf":
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 raw_text = f.read()
         except UnicodeDecodeError:
             with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
                 raw_text = f.read()
+        return raw_text
 
-    # Filtrado línea a línea
-    clean_lines = []
-    for line in raw_text.splitlines():
-        cleaned = clean_extracted_line(line)
-        if cleaned:
-            clean_lines.append(cleaned)
+    print(f"\n========================================================================")
+    print(f" 📄 INICIANDO EXTRACCIÓN HÍBRIDA MULTI-CAPA ULTRA-VERBOSA: {file_path.name}")
+    print("========================================================================")
 
-    return "\n".join(clean_lines)
+    # 1. Extracción Nativa por PDF Extractor
+    native_pages_map: Dict[int, str] = {}
+    try:
+        extractor = MOMPurePDFExtractor(file_path)
+        extracted_native = extractor.extract_full_text_with_page_markers()
+        
+        page_chunks = re.split(r'<!--\s*PAGE\s+(\d+)\s*-->', extracted_native, flags=re.IGNORECASE)
+        for i in range(1, len(page_chunks), 2):
+            p_num = int(page_chunks[i])
+            p_text = page_chunks[i+1].strip()
+            native_pages_map[p_num] = p_text
+
+        print(f"🔍 [EXTRACTOR NATIVO] Detectadas {len(native_pages_map)} página(s) con capa de texto.")
+    except Exception as e:
+        print(f"⚠️ [EXTRACTOR NATIVO] Fallo parcial ({e}). Continuando únicamente con OCR...")
+
+    # 2. Extracción Forzada por Motor OCR con Barra de Progreso
+    ocr_pages_map: Dict[int, str] = {}
+    total_pages = get_total_pdf_pages(file_path) or max(list(native_pages_map.keys()) + [1])
+    
+    try:
+        ocr = MOMOCREngine()
+        temp_pgm_dir = file_path.parent / "_temp_pgm"
+        temp_pgm_dir.mkdir(exist_ok=True)
+        
+        print(f"⚙️ [MOTOR OCR] Convirtiendo {total_pages} página(s) a PGM y procesando glifos...\n")
+        
+        for p_num in range(1, total_pages + 1):
+            render_progress_bar(p_num, total_pages, prefix="  • Progreso OCR:")
+            try:
+                pgm_file = ocr.convert_pdf_page_to_pgm(file_path, p_num, temp_pgm_dir)
+                p_text = ocr.process_pgm_page(pgm_file).strip()
+                ocr_pages_map[p_num] = p_text
+            except Exception:
+                break
+
+        print("\n✅ [MOTOR OCR] Renderizado y reconocimiento por glifos completado.")
+
+        if temp_pgm_dir.exists():
+            shutil.rmtree(temp_pgm_dir, ignore_errors=True)
+    except Exception as ocr_err:
+        print(f"\n❌ [MOTOR OCR] Error en la ejecución ({ocr_err}).")
+
+    # 3. Combinación Híbrida y Streaming Verboso de Párrafos
+    combined_pages = []
+    all_pages = sorted(list(set(list(native_pages_map.keys()) + list(ocr_pages_map.keys()))))
+    if not all_pages:
+        all_pages = [1]
+
+    print("\n------------------------------------------------------------------------")
+    print(" 🧩 STREAMING DE CONSTRUCCIÓN Y FUSIÓN PÁRRAFO A PÁRRAFO EN TIEMPO REAL")
+    print("------------------------------------------------------------------------")
+
+    for p in all_pages:
+        nat_txt = native_pages_map.get(p, "").strip()
+        ocr_txt = ocr_pages_map.get(p, "").strip()
+
+        print(f"\n📖 [PÁGINA {p}/{len(all_pages)}] Fusionando capas (Nativa: {len(nat_txt)} chars | OCR: {len(ocr_txt)} chars)")
+
+        fused_lines = []
+        seen_lines = set()
+
+        for line in (nat_txt + "\n" + ocr_txt).splitlines():
+            cleaned = clean_extracted_line(line)
+            if cleaned and cleaned.lower() not in seen_lines:
+                seen_lines.add(cleaned.lower())
+                fused_lines.append(cleaned)
+
+        page_body = "\n".join(fused_lines)
+        
+        # Muestra en vivo los párrafos que se van construyendo en la terminal
+        paragraphs = [p_str.strip() for p_str in page_body.split("\n\n") if p_str.strip()]
+        for p_idx, para in enumerate(paragraphs, 1):
+            preview = para[:120].replace("\n", " ")
+            print(f"   └─ 📝 [Párrafo {p_idx}] {preview}...")
+
+        combined_pages.append(f"<!-- PAGE {p} -->\n{page_body}")
+
+    final_full_text = "\n\n".join(combined_pages)
+    print("\n========================================================================")
+    print(f" ✅ EXTRACCIÓN HÍBRIDA REALIZADA CON ÉXITO: Total {len(final_full_text)} caracteres.")
+    print("========================================================================\n")
+    
+    return final_full_text
 
 def ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
     """Crea o actualiza el project.json de un nodo en el disco respetando sus padres y visibilidad."""
@@ -285,7 +337,6 @@ class MOMMultilingualIngestionAgent:
 
         raw_dir = work_dir / "raw"
         
-        # Paso 1: Deduplicación automática de archivos duplicados en 'raw'
         orig_file = None
         if raw_dir.exists():
             try:
@@ -357,28 +408,31 @@ class MOMMultilingualIngestionAgent:
         raw_bib_dir.mkdir(parents=True, exist_ok=True)
         split_bib_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Copiar archivo original
-        dest_orig = raw_bib_dir / f"original_{original_file.name}"
+        clean_orig_name = original_file.name
+        if clean_orig_name.startswith("original_"):
+            clean_orig_name = clean_orig_name[len("original_"):]
+
+        dest_orig = raw_bib_dir / f"original_{clean_orig_name}"
         if original_file.resolve() != dest_orig.resolve():
             shutil.copy(original_file, dest_orig)
         sha256_orig = calculate_sha256(dest_orig)
 
-        # 2. Copiar archivo de traducción si existe
         dest_trans = None
         sha256_trans = None
         if translation_file and translation_file.exists():
-            dest_trans = raw_bib_dir / f"translation_{translation_file.name}"
+            clean_trans_name = translation_file.name
+            if clean_trans_name.startswith("translation_"):
+                clean_trans_name = clean_trans_name[len("translation_"):]
+            dest_trans = raw_bib_dir / f"translation_{clean_trans_name}"
             if translation_file.resolve() != dest_trans.resolve():
                 shutil.copy(translation_file, dest_trans)
             sha256_trans = calculate_sha256(dest_trans)
 
-        # 3. Extraer texto limpio y guardar Markdown original extraído
         orig_text = extract_text_from_file(dest_orig)
         extracted_orig_md = split_bib_dir / "original_extracted.md"
         with open(extracted_orig_md, "w", encoding="utf-8") as f:
             f.write(orig_text)
 
-        # 4. VALIDACIÓN / GATING DE TRADUCCIÓN OBLIGATORIA
         if not is_spanish_original and not dest_trans:
             extracted_trans_md = split_bib_dir / "translation_extracted.md"
             if extracted_trans_md.exists():
@@ -405,14 +459,12 @@ class MOMMultilingualIngestionAgent:
                 "proposals_generated": 0
             }
 
-        # 5. Inicializar Proyectos y Jerarquía Herencial una vez asegurada la traducción
         ensure_project_exists(self.pm, "MOSBIB", "Pilar Global de Bibliografía", [], False, "Pilar herencial de obras y fuentes bibliográficas")
         ensure_project_exists(self.pm, raw_project_id, f"Fuente Matriz RAW: {title}", [], raw_is_private, f"Archivo maestro original de {title}")
         ensure_project_exists(self.pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
         ensure_project_exists(self.pm, author_clean, author_clean, [work_project_id, "MOSBIB"], False, f"Autor consolidador {author_clean}")
         ensure_project_exists(self.pm, "MOSAUTHOR", "Consolidador Global de Autores", [author_clean], False, "Nodo central de herencia global")
 
-        # 6. Parsear ambos textos (Original + Traducción)
         orig_nodes, orig_refs = MultilingualDeterministicParser.parse_text(orig_text)
 
         trans_nodes = []
@@ -420,13 +472,11 @@ class MOMMultilingualIngestionAgent:
             trans_text = extract_text_from_file(dest_trans)
             trans_nodes, _ = MultilingualDeterministicParser.parse_text(trans_text)
 
-        # Guardar lista de referencias extraídas
         ref_file_path = work_bib_dir / "extracted_references.txt"
         with open(ref_file_path, "w", encoding="utf-8") as f:
             for ref in orig_refs:
                 f.write(f"{ref}\n\n")
 
-        # 7. Generar propuestas con trazabilidad pareada
         generated_proposals = 0
         for idx, o_node in enumerate(orig_nodes, 1):
             item_id = f"COR-{work_project_id}-{idx:03d}"
@@ -538,5 +588,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.4
-# File_Version: 0.5.3.3
+# File_Version: 0.5.3.5
 # Schema_Version: 0.5.3

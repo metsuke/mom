@@ -1,11 +1,12 @@
 import math
 import os
 import re
+import sys
 import hashlib
 import subprocess
 import tkinter as tk
 from pathlib import Path
-from typing import List, Dict, Tuple, Any, Optional
+from typing import List, Dict, Tuple, Any, Optional, Callable
 
 from schemas import CURRENT_SCHEMA_VERSION
 
@@ -14,6 +15,7 @@ class MOMOCREngine:
     Motor de Reconocimiento Óptico de Caracteres (OCR) Pure-Python sin dependencias externas.
     Procesa imágenes PGM/PPM utilizando la librería estándar (tkinter.PhotoImage)
     para binarizar, segmentar glifos por inundación y clasificar glifos mediante vectores de características.
+    Soporta callbacks de progreso para retroalimentación en tiempo real en la terminal.
     """
 
     def __init__(self, templates: Optional[Dict[str, List[float]]] = None) -> None:
@@ -81,7 +83,6 @@ class MOMOCREngine:
             file_hash = sha256.hexdigest()
 
             if file_hash in seen_hashes:
-                # Es un duplicado sobrante: se elimina
                 os.remove(file_path)
             else:
                 seen_hashes[file_hash] = file_path
@@ -91,7 +92,7 @@ class MOMOCREngine:
         return kept_file
 
     def convert_pdf_page_to_pgm(self, pdf_path: Path, page_num: int, output_dir: Path) -> Path:
-        """Convierte una página del PDF a formato PGM mediante la utilidad del sistema pdftoppm."""
+        """Convierte una página del PDF a formato PGM mediante pdftoppm."""
         output_prefix = output_dir / f"page_{page_num}"
         cmd = [
             "pdftoppm",
@@ -108,7 +109,6 @@ class MOMOCREngine:
 
         pgm_file = output_dir / f"page_{page_num}-1.pgm"
         if not pgm_file.exists():
-            # Buscar fallback de nombre alternativo generado por pdftoppm
             candidates = list(output_dir.glob(f"page_{page_num}*.pgm"))
             if candidates:
                 return candidates[0]
@@ -163,11 +163,9 @@ class MOMOCREngine:
                                     visited[ny][nx] = True
                                     stack.append((nx, ny))
 
-                    # Filtrar ruido de píxeles aislados
                     if (max_x - min_x >= 2) and (max_y - min_y >= 2):
                         glyphs.append((min_x, min_y, max_x, max_y, glyph_pixels))
 
-        # Ordenar glifos por lectura top-down, left-right
         glyphs.sort(key=lambda g: (g[1] // 20, g[0]))
         return glyphs
 
@@ -208,20 +206,26 @@ class MOMOCREngine:
 
         return best_char
 
-    def process_pgm_page(self, pgm_path: Path) -> str:
-        """Procesa una imagen PGM completa y devuelve el texto extraído."""
+    def process_pgm_page(self, pgm_path: Path, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> str:
+        """Procesa una imagen PGM notificando el avance glifo a glifo si existe callback."""
         matriz, ancho, alto = self.load_pgm_image(pgm_path)
         glyphs = self.segment_glyphs(matriz, ancho, alto)
 
         extracted_chars = []
-        for g in glyphs:
+        total_glyphs = len(glyphs)
+
+        for i, g in enumerate(glyphs, 1):
             min_x, min_y, max_x, max_y, pixels = g
             feat = self.extract_feature_vector(min_x, min_y, max_x, max_y, pixels)
             char = self.classify_glyph(feat)
             extracted_chars.append(char)
 
+            if progress_callback and (i % 10 == 0 or i == total_glyphs):
+                curr_text = "".join(extracted_chars[-40:])  # Muestra los últimos 40 caracteres reconocidos
+                progress_callback(i, total_glyphs, curr_text)
+
         return "".join(extracted_chars)
 
-# Version: 0.5.3
-# File_Version: 0.5.3.0
+# Version: 0.5.4
+# File_Version: 0.5.3.1
 # Schema_Version: 0.5.3
