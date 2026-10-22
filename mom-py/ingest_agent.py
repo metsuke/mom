@@ -44,21 +44,71 @@ def render_progress_bar(current: int, total: int, prefix: str = "", bar_length: 
     sys.stdout.flush()
 
 def get_total_pdf_pages(pdf_path: Path) -> int:
-    """Obtiene el número total de páginas de un PDF usando pdfinfo si está disponible."""
+    """
+    Obtiene el número total de páginas de un PDF inspeccionando directamente
+    el binario con expresiones regulares (Python Puro, Cero librerías externas).
+    """
     try:
-        res = subprocess.run(["pdfinfo", str(pdf_path)], capture_output=True, text=True, check=True)
-        for line in res.stdout.splitlines():
-            if line.startswith("Pages:"):
-                return int(line.split(":")[1].strip())
+        with open(pdf_path, "rb") as f:
+            content = f.read()
+
+        # 1. Intentar encontrar la entrada principal del catálogo de páginas /Type /Pages ... /Count N
+        counts = re.findall(rb'/Type\s*/Pages\b[^>]*?/Count\s+(\d+)', content)
+        if counts:
+            return max(int(c.decode('ascii')) for c in counts)
+
+        # 2. Fallback: Contar las ocurrencias directas del objeto página /Type /Page
+        page_objs = re.findall(rb'/Type\s*/Page\b', content)
+        if page_objs:
+            return len(page_objs)
     except Exception:
         pass
     return 0
 
+def convert_pdf_to_images(pdf_path: Path, output_dir: Path, total_pages: int) -> List[Path]:
+    """
+    Genera o recupera una colección de imágenes PNG guardadas en <nombre_pdf>_imgs/
+    nombradas con formato <nombre_pdf>_XXXX.png (4 dígitos con leading zeroes).
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    pdf_stem = pdf_path.stem
+    image_files = []
+
+    for p_num in range(1, total_pages + 1):
+        formatted_page = f"{p_num:04d}"
+        target_img = output_dir / f"{pdf_stem}_{formatted_page}.png"
+        
+        if not target_img.exists():
+            # Convierte la página individual a PNG
+            temp_prefix = output_dir / f"temp_{p_num}"
+            cmd = [
+                "pdftoppm",
+                "-png",
+                "-r", "150",
+                "-f", str(p_num),
+                "-l", str(p_num),
+                str(pdf_path),
+                str(temp_prefix)
+            ]
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                candidates = list(output_dir.glob(f"temp_{p_num}*.png"))
+                if candidates:
+                    candidates[0].rename(target_img)
+            except Exception as e:
+                print(f"\n⚠️ Warning: No se pudo renderizar la página {p_num} a PNG ({e})")
+
+        if target_img.exists():
+            image_files.append(target_img)
+
+    return sorted(image_files)
+
 def extract_text_from_file(file_path: Path) -> str:
     """
-    ESTRATEGIA HÍBRIDA MULTI-CAPA ULTRA-VERBOSA CON STREAMING DE PÁRRAFOS Y BARRA DE PROGRESO:
-    Ejecuta siempre la extracción nativa y el OCR página a página, informando en pantalla
-    del progreso en tiempo real y transmitiendo el párrafo que se está construyendo.
+    ESTRATEGIA HÍBRIDA MULTI-CAPA CON COLECCIÓN DE IMÁGENES PERSISTENTES EN DISCO:
+    1. Renderiza el PDF a la carpeta <pdf>_imgs/ con archivos <pdf>_XXXX.png
+    2. Combina la capa de texto vectorial nativa con el OCR por glifos de cada PNG.
+    3. Filtra líneas duplicadas y limpia encabezados/pies.
     """
     ext = file_path.suffix.lower()
     
@@ -72,7 +122,7 @@ def extract_text_from_file(file_path: Path) -> str:
         return raw_text
 
     print(f"\n========================================================================")
-    print(f" 📄 INICIANDO EXTRACCIÓN HÍBRIDA MULTI-CAPA ULTRA-VERBOSA: {file_path.name}")
+    print(f" 📄 INICIANDO EXTRACCIÓN HÍBRIDA MULTI-CAPA PERSISTENTE: {file_path.name}")
     print("========================================================================")
 
     # 1. Extracción Nativa por PDF Extractor
@@ -91,38 +141,41 @@ def extract_text_from_file(file_path: Path) -> str:
     except Exception as e:
         print(f"⚠️ [EXTRACTOR NATIVO] Fallo parcial ({e}). Continuando únicamente con OCR...")
 
-    # 2. Extracción Forzada por Motor OCR con Barra de Progreso
-    ocr_pages_map: Dict[int, str] = {}
+    # 2. Generación/Recuperación de la colección de imágenes <pdf>_imgs/<pdf>_XXXX.png
     total_pages = get_total_pdf_pages(file_path) or max(list(native_pages_map.keys()) + [1])
+    imgs_dir = file_path.parent / f"{file_path.stem}_imgs"
     
+    print(f"🖼️ [GESTOR IMÁGENES] Preparando colección de imágenes PNG en: {imgs_dir.name}/")
+    image_files = convert_pdf_to_images(file_path, imgs_dir, total_pages)
+    print(f"✅ [GESTOR IMÁGENES] Colección lista con {len(image_files)} archivo(s) PNG (XXXX.png).")
+
+    # 3. OCR sobre cada imagen PNG de la colección
+    ocr_pages_map: Dict[int, str] = {}
     try:
         ocr = MOMOCREngine()
-        temp_pgm_dir = file_path.parent / "_temp_pgm"
-        temp_pgm_dir.mkdir(exist_ok=True)
+        print(f"\n⚙️ [MOTOR OCR] Procesando {len(image_files)} página(s) desde la carpeta de imágenes...\n")
         
-        print(f"⚙️ [MOTOR OCR] Convirtiendo {total_pages} página(s) a PGM y procesando glifos...\n")
-        
-        for p_num in range(1, total_pages + 1):
-            render_progress_bar(p_num, total_pages, prefix="  • Progreso OCR:")
+        for idx, img_path in enumerate(image_files, 1):
+            render_progress_bar(idx, len(image_files), prefix="  • Progreso OCR:")
             try:
-                pgm_file = ocr.convert_pdf_page_to_pgm(file_path, p_num, temp_pgm_dir)
-                p_text = ocr.process_pgm_page(pgm_file).strip()
+                # Extraer número de página a partir del formato XXXX.png
+                page_match = re.search(r'_(\d{4})\.png$', img_path.name)
+                p_num = int(page_match.group(1)) if page_match else idx
+                
+                p_text = ocr.process_pgm_page(img_path).strip()
                 ocr_pages_map[p_num] = p_text
             except Exception:
-                break
+                continue
 
-        print("\n✅ [MOTOR OCR] Renderizado y reconocimiento por glifos completado.")
-
-        if temp_pgm_dir.exists():
-            shutil.rmtree(temp_pgm_dir, ignore_errors=True)
+        print("\n✅ [MOTOR OCR] Procesamiento de colección de imágenes completado.")
     except Exception as ocr_err:
         print(f"\n❌ [MOTOR OCR] Error en la ejecución ({ocr_err}).")
 
-    # 3. Combinación Híbrida y Streaming Verboso de Párrafos
+    # 4. Combinación Híbrida y Streaming Verboso de Párrafos
     combined_pages = []
     all_pages = sorted(list(set(list(native_pages_map.keys()) + list(ocr_pages_map.keys()))))
     if not all_pages:
-        all_pages = [1]
+        all_pages = list(range(1, total_pages + 1))
 
     print("\n------------------------------------------------------------------------")
     print(" 🧩 STREAMING DE CONSTRUCCIÓN Y FUSIÓN PÁRRAFO A PÁRRAFO EN TIEMPO REAL")
@@ -275,7 +328,7 @@ class MultilingualDeterministicParser:
                     current_page_end = next_page
                 else:
                     current_page_start = int(page_match.group(1)) if page_match else (current_page_start + 1 if current_page_start else 1)
-                    current_page_end = current_page_start
+                    current_page_start = current_page_start
 
                 cleaned_line = re.sub(r'<!--\s*PAGE\s+\d+\s*-->', '', line_str, flags=re.IGNORECASE).strip()
                 cleaned_line = cleaned_line.replace('\f', '').strip()
@@ -588,5 +641,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.4
-# File_Version: 0.5.3.5
+# File_Version: 0.5.4.0
 # Schema_Version: 0.5.3
