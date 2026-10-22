@@ -16,6 +16,7 @@ if str(current_dir) not in sys.path:
 from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, ItemAttributes, ItemMetadata, CURRENT_SCHEMA_VERSION
 from pdf_parser import MOMPurePDFExtractor
+from ocr_engine import MOMOCREngine
 
 def calculate_sha256(file_path: Path) -> str:
     """Calcula el hash SHA-256 de cualquier archivo para garantizar la cadena de custodia de la fuente matriz."""
@@ -25,24 +26,78 @@ def calculate_sha256(file_path: Path) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+def clean_extracted_line(line_str: str) -> str:
+    """Limpia marcas de agua, pies de página y encabezados ruidosos de repositorios como everyspec."""
+    if "everyspec.com" in line_str.lower():
+        return ""
+    if re.search(r'downloaded from https?://', line_str, re.IGNORECASE):
+        return ""
+    return line_str.strip()
+
 def extract_text_from_file(file_path: Path) -> str:
-    """Extrae texto plano deterministamente desde archivos .md, .txt o .pdf usando el extractor nativo pure-python."""
+    """
+    Extrae texto plano deterministamente desde archivos .md, .txt o .pdf.
+    Si el extractor de PDF nativo devuelve un texto vacío/corrupto, activa automáticamente
+    el motor OCR casero en Python puro (MOMOCREngine).
+    """
     ext = file_path.suffix.lower()
+    raw_text = ""
+    used_ocr = False
+
     if ext == ".pdf":
         try:
             extractor = MOMPurePDFExtractor(file_path)
             extracted = extractor.extract_full_text_with_page_markers()
-            if extracted.strip():
-                return extracted
+            if len(extracted.strip()) > 100:
+                raw_text = extracted
+            else:
+                print("⚠️ Capa de texto vacía o corrupta en PDF. Activando fallback a MOMOCREngine...")
         except Exception as e:
-            print(f"⚠️ Extractor PDF nativo reportó advertencia ({e}), intentando fallback de lectura directa...")
+            print(f"⚠️ Extractor PDF nativo fallo ({e}). Activando fallback a MOMOCREngine...")
 
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except UnicodeDecodeError:
-        with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
-            return f.read()
+        # Fallback a OCR casero si no se pudo extraer texto nativamente
+        if not raw_text.strip():
+            try:
+                ocr = MOMOCREngine()
+                temp_pgm_dir = file_path.parent / "_temp_pgm"
+                temp_pgm_dir.mkdir(exist_ok=True)
+                
+                # Intentar procesar página a página (asumiendo al menos página 1)
+                page_texts = []
+                for p_num in range(1, 500): # Límite superior de seguridad
+                    try:
+                        pgm_file = ocr.convert_pdf_page_to_pgm(file_path, p_num, temp_pgm_dir)
+                        p_text = ocr.process_pgm_page(pgm_file)
+                        page_texts.append(f"<!-- PAGE {p_num} -->\n{p_text}")
+                    except Exception:
+                        break # Se alcanzaron todas las páginas conversibles
+
+                raw_text = "\n\n".join(page_texts)
+                used_ocr = True
+                print(f"✅ OCR completado. Texto extraído de {len(page_texts)} página(s).")
+
+                # Limpieza de temporales PGM
+                if temp_pgm_dir.exists():
+                    shutil.rmtree(temp_pgm_dir, ignore_errors=True)
+            except Exception as ocr_err:
+                print(f"❌ Error durante la ejecución del OCR: {ocr_err}")
+
+    if not raw_text:
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                raw_text = f.read()
+        except UnicodeDecodeError:
+            with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
+                raw_text = f.read()
+
+    # Filtrado línea a línea
+    clean_lines = []
+    for line in raw_text.splitlines():
+        cleaned = clean_extracted_line(line)
+        if cleaned:
+            clean_lines.append(cleaned)
+
+    return "\n".join(clean_lines)
 
 def ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
     """Crea o actualiza el project.json de un nodo en el disco respetando sus padres y visibilidad."""
@@ -139,7 +194,7 @@ class MultilingualDeterministicParser:
                     })
 
         for line in lines:
-            line_str = line.strip()
+            line_str = clean_extracted_line(line)
             if not line_str:
                 flush_paragraph()
                 continue
@@ -220,15 +275,21 @@ class MOMMultilingualIngestionAgent:
             meta = json.load(f)
 
         raw_dir = work_dir / "raw"
-        raw_files = list(raw_dir.glob("*")) if raw_dir.exists() else []
-
+        
+        # Paso 1: Deduplicación automática de archivos duplicados en 'raw'
         orig_file = None
+        if raw_dir.exists():
+            try:
+                orig_file = MOMOCREngine.deduplicate_raw_directory(raw_dir)
+                print(f"🧹 Deduplicación completada en RAW. Archivo conservado: {orig_file.name}")
+            except FileNotFoundError:
+                pass
+
+        raw_files = list(raw_dir.glob("*")) if raw_dir.exists() else []
         trans_file = None
 
         for rf in raw_files:
-            if rf.name.startswith("original_"):
-                orig_file = rf
-            elif rf.name.startswith("translation_"):
+            if rf.name.startswith("translation_"):
                 trans_file = rf
 
         if not orig_file and raw_files:
@@ -237,7 +298,7 @@ class MOMMultilingualIngestionAgent:
         if not orig_file:
             raise FileNotFoundError(f"❌ No hay ningún archivo fuente en la carpeta RAW de {work_dir}")
 
-        print(f"\n🚀 Iniciando troceo agéntico para la obra registrada '{meta.get('work_id')}'...")
+        print(f"\n🚀 Iniciando análisis de la obra registrada '{meta.get('work_id')}'...")
         print(f"  • Archivo Original: {orig_file.name}")
         if trans_file:
             print(f"  • Archivo Traducción: {trans_file.name}")
@@ -252,7 +313,8 @@ class MOMMultilingualIngestionAgent:
             publisher=meta.get("publisher", "Desconocido"),
             year=meta.get("year", 2026),
             license_type=meta.get("license_type", "Copyright"),
-            allow_public_export=meta.get("allow_full_text_export", False)
+            allow_public_export=meta.get("allow_full_text_export", False),
+            is_spanish_original=meta.get("is_spanish_original", False)
         )
 
     def ingest_work(
@@ -266,7 +328,8 @@ class MOMMultilingualIngestionAgent:
         publisher: str = "Desconocido",
         year: int = 2026,
         license_type: str = "Copyright",
-        allow_public_export: bool = False
+        allow_public_export: bool = False,
+        is_spanish_original: bool = False
     ) -> Dict[str, Any]:
 
         if not original_file.exists():
@@ -300,15 +363,47 @@ class MOMMultilingualIngestionAgent:
                 shutil.copy(translation_file, dest_trans)
             sha256_trans = calculate_sha256(dest_trans)
 
-        # 3. Inicializar Proyectos y Jerarquía Herencial
+        # 3. Extraer texto limpio y guardar Markdown original extraído
+        orig_text = extract_text_from_file(dest_orig)
+        extracted_orig_md = split_bib_dir / "original_extracted.md"
+        with open(extracted_orig_md, "w", encoding="utf-8") as f:
+            f.write(orig_text)
+
+        # 4. VALIDACIÓN / GATING DE TRADUCCIÓN OBLIGATORIA
+        if not is_spanish_original and not dest_trans:
+            extracted_trans_md = split_bib_dir / "translation_extracted.md"
+            if extracted_trans_md.exists():
+                dest_trans = extracted_trans_md
+                sha256_trans = calculate_sha256(dest_trans)
+
+        if not is_spanish_original and not dest_trans:
+            print("\n=======================================================")
+            print(" 🛑 INGESTA PAUSADA: SE REQUIERE TRADUCCIÓN HUMANA")
+            print("=======================================================")
+            print(f"  • El documento original se ha extraído correctamente a Markdown.")
+            print(f"  • Ubicación del Markdown original: {extracted_orig_md}")
+            print(f"  • Acción requerida: Traduce dicho archivo y guárdalo como:")
+            print(f"    -> {split_bib_dir / 'translation_extracted.md'}")
+            print(f"    o bien añade un archivo 'translation_*' en {raw_bib_dir}")
+            print("  • NO se generará ninguna propuesta de troceo hasta disponer de la traducción.")
+            print("=======================================================\n")
+            
+            return {
+                "status": "PAUSED_MISSING_TRANSLATION",
+                "work_project_id": work_project_id,
+                "original_md_path": str(extracted_orig_md),
+                "expected_translation_path": str(split_bib_dir / "translation_extracted.md"),
+                "proposals_generated": 0
+            }
+
+        # 5. Inicializar Proyectos y Jerarquía Herencial una vez asegurada la traducción
         ensure_project_exists(self.pm, "MOSBIB", "Pilar Global de Bibliografía", [], False, "Pilar herencial de obras y fuentes bibliográficas")
         ensure_project_exists(self.pm, raw_project_id, f"Fuente Matriz RAW: {title}", [], raw_is_private, f"Archivo maestro original de {title}")
         ensure_project_exists(self.pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
         ensure_project_exists(self.pm, author_clean, author_clean, [work_project_id, "MOSBIB"], False, f"Autor consolidador {author_clean}")
         ensure_project_exists(self.pm, "MOSAUTHOR", "Consolidador Global de Autores", [author_clean], False, "Nodo central de herencia global")
 
-        # 4. Extraer y parsear
-        orig_text = extract_text_from_file(dest_orig)
+        # 6. Parsear ambos textos (Original + Traducción)
         orig_nodes, orig_refs = MultilingualDeterministicParser.parse_text(orig_text)
 
         trans_nodes = []
@@ -322,17 +417,22 @@ class MOMMultilingualIngestionAgent:
             for ref in orig_refs:
                 f.write(f"{ref}\n\n")
 
-        # 5. Generar propuestas con trazabilidad de 3 capas
+        # 7. Generar propuestas con trazabilidad pareada
         generated_proposals = 0
         for idx, o_node in enumerate(orig_nodes, 1):
             item_id = f"COR-{work_project_id}-{idx:03d}"
             
-            t_node_content = trans_nodes[idx - 1]["content"] if idx <= len(trans_nodes) else None
+            if is_spanish_original:
+                t_node_content = o_node["content"]
+                orig_en_content = None
+                translation_status = "ORIGINAL_ESPANOL"
+            else:
+                t_node_content = trans_nodes[idx - 1]["content"] if idx <= len(trans_nodes) else None
+                orig_en_content = o_node["content"]
+                translation_status = "TRADUCCION_HUMANA_COMPLETA" if t_node_content else "PENDIENTE_TRADUCCION_HUMANA"
 
             p_start = o_node["page_start"]
             page_str = f"Pág. {p_start}" if p_start else "Pág. N/A"
-
-            translation_status = "TRADUCCION_ORIGEN" if t_node_content else "PENDIENTE_TRADUCCION_HUMANA"
 
             proposal_data = {
                 "id": item_id,
@@ -356,9 +456,9 @@ class MOMMultilingualIngestionAgent:
                     "declared_in_project": work_project_id,
                     "ai_guardrails": f"Obra: {title} | Supervisor Responsable: {self.supervisor_name}",
                     "multilingual_triplet": {
-                        "text_original_en": o_node["content"],
-                        "text_es_raw": t_node_content,
-                        "text_es_curated": None,
+                        "text_original_en": orig_en_content,
+                        "text_es_raw": None,
+                        "text_es_curated": t_node_content,
                         "translator_author_id": translator_author_id,
                         "translation_status": translation_status
                     }
@@ -376,13 +476,14 @@ class MOMMultilingualIngestionAgent:
         print(f"  • Proyecto Obra Despiece:    {work_project_id}")
         print(f"  • Proyecto Fuente RAW:       {raw_project_id}")
         print(f"  • SHA-256 Fuente Original:   {sha256_orig}")
-        print(f"  • SHA-256 Traducción Origen: {sha256_trans or 'Sin traducción de origen'}")
+        print(f"  • SHA-256 Traducción:        {sha256_trans or 'N/A (Original ES)'}")
         print(f"  • Total Nodos Extraídos:     {len(orig_nodes)}")
         print(f"  • Referencias Bibliográficas: {len(orig_refs)}")
         print(f"  • Propuestas Generadas:      {generated_proposals} en 'data/ai-proposals/'")
         print("=======================================================")
 
         return {
+            "status": "SUCCESS",
             "work_project_id": work_project_id,
             "raw_project_id": raw_project_id,
             "sha256_original": sha256_orig,
@@ -404,6 +505,7 @@ def main():
     parser.add_argument("--year", type=int, default=1991, help="Año de publicación")
     parser.add_argument("--license", default="Public Domain", help="Tipo de Licencia")
     parser.add_argument("--public", action="store_true", help="Permitir exportación pública completa")
+    parser.add_argument("--spanish-original", action="store_true", help="Indica si el original ya viene en idioma español")
 
     args = parser.parse_args()
     data_dir = current_dir.parent / "data"
@@ -419,12 +521,13 @@ def main():
         publisher=args.publisher,
         year=args.year,
         license_type=args.license,
-        allow_public_export=args.public
+        allow_public_export=args.public,
+        is_spanish_original=args.spanish_original
     )
 
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.3
-# File_Version: 0.5.2.11
+# Version: 0.5.4
+# File_Version: 0.5.3.1
 # Schema_Version: 0.5.3

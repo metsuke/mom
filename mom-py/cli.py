@@ -354,7 +354,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     print("=======================================================")
     print("  [1] Inicializar Nodo Autor Consolidador (ej. AUTHOR-W3C)")
     print("  [2] Registrar OBRA FORMAL Y MATRIZ RAW (ej. AUTHOR-W3C-WCAG22)")
-    print("  [3] Ejecutar TROCEO AGÉNTICO sobre una Obra Registrada")
+    print("  [3] Ejecutar TROCEO AGÉNTICO (con Deduplicación RAW y OCR) sobre una Obra Registrada")
     print("  [4] Ejecutar Kill-Switch / Revocación de Cita Literal")
     print("  [0] Volver al Menú Principal")
     print("-------------------------------------------------------")
@@ -401,6 +401,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         url = input("URL / DOI / ISBN de referencia: ").strip()
         license_type = input("Tipo de Licencia (ej. W3C, Public Domain, CC-BY, Copyright): ").strip() or "W3C"
         
+        is_spanish = ask_confirmation("¿El documento original está escrito directamente en español?")
         allow_export = ask_confirmation("¿Permite exportación de texto literal completo (Dominio Público/Licencia Abierta)?")
         raw_is_private = not allow_export
 
@@ -436,6 +437,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
             "url": url,
             "license_type": license_type,
             "allow_full_text_export": allow_export,
+            "is_spanish_original": is_spanish,
             "kill_switch_enabled": False,
             "sha256_hash": sha256_str
         }
@@ -450,7 +452,9 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         if raw_file_str and ask_confirmation("¿Deseas lanzar el TROCEO AGÉNTICO inmediatamente para esta obra?"):
             from ingest_agent import MOMMultilingualIngestionAgent
             agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
-            agent.ingest_registered_work(work_dir)
+            res = agent.ingest_registered_work(work_dir)
+            if res.get("status") == "PAUSED_MISSING_TRANSLATION":
+                print("ℹ️ Recuérdalo: añade la traducción en Markdown y vuelve a ejecutar la opción [3] para generar las propuestas.")
 
     elif opt == "3":
         print("\n--- 🤖 SELECCIONAR OBRA REGISTRADA PARA TROCEO AGÉNTICO ---")
@@ -470,7 +474,8 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         for i, wd in enumerate(registered_works, 1):
             with open(wd / "metadata.json", "r", encoding="utf-8") as f:
                 meta = json.load(f)
-            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+            lang_str = " (Original ES)" if meta.get("is_spanish_original") else " (Requiere Traducción)"
+            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}{lang_str}")
 
         try:
             w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
@@ -481,7 +486,9 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
 
         from ingest_agent import MOMMultilingualIngestionAgent
         agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
-        agent.ingest_registered_work(target_work_dir)
+        res = agent.ingest_registered_work(target_work_dir)
+        if res.get("status") == "PAUSED_MISSING_TRANSLATION":
+            print("ℹ️ Proceso en pausa hasta recibir el archivo de traducción en español.")
 
     elif opt == "4":
         print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
@@ -1558,6 +1565,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.3
-# File_Version: 0.5.2.13
+# Version: 0.5.4
+# File_Version: 0.5.3.2
 # Schema_Version: 0.5.3
