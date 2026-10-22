@@ -37,8 +37,8 @@ def clean_extracted_line(line_str: str) -> str:
 def extract_text_from_file(file_path: Path) -> str:
     """
     Extrae texto plano deterministamente desde archivos .md, .txt o .pdf.
-    Si el extractor de PDF nativo devuelve un texto vacío/corrupto, activa automáticamente
-    el motor OCR casero en Python puro (MOMOCREngine).
+    Filtra marcadores de página HTML para evaluar si la capa de texto real es suficiente.
+    Si está vacía o es insuficiente, activa automáticamente el motor OCR (MOMOCREngine).
     """
     ext = file_path.suffix.lower()
     raw_text = ""
@@ -48,29 +48,32 @@ def extract_text_from_file(file_path: Path) -> str:
         try:
             extractor = MOMPurePDFExtractor(file_path)
             extracted = extractor.extract_full_text_with_page_markers()
-            if len(extracted.strip()) > 100:
+            
+            # FILTRADO STRICTO: Eliminar comentarios de página HTML para evaluar el contenido real
+            clean_content = re.sub(r'<!--\s*PAGE\s+\d+\s*-->', '', extracted, flags=re.IGNORECASE).strip()
+            
+            if len(clean_content) > 100:
                 raw_text = extracted
             else:
-                print("⚠️ Capa de texto vacía o corrupta en PDF. Activando fallback a MOMOCREngine...")
+                print(f"⚠️ Capa de texto vacía o insuficiente ({len(clean_content)} caracteres útiles). Activando fallback a MOMOCREngine...")
         except Exception as e:
-            print(f"⚠️ Extractor PDF nativo fallo ({e}). Activando fallback a MOMOCREngine...")
+            print(f"⚠️ Extractor PDF nativo falló ({e}). Activando fallback a MOMOCREngine...")
 
-        # Fallback a OCR casero si no se pudo extraer texto nativamente
+        # Fallback a OCR casero si no hay texto real utilizable
         if not raw_text.strip():
             try:
                 ocr = MOMOCREngine()
                 temp_pgm_dir = file_path.parent / "_temp_pgm"
                 temp_pgm_dir.mkdir(exist_ok=True)
                 
-                # Intentar procesar página a página (asumiendo al menos página 1)
                 page_texts = []
-                for p_num in range(1, 500): # Límite superior de seguridad
+                for p_num in range(1, 500):  # Límite superior de seguridad
                     try:
                         pgm_file = ocr.convert_pdf_page_to_pgm(file_path, p_num, temp_pgm_dir)
                         p_text = ocr.process_pgm_page(pgm_file)
                         page_texts.append(f"<!-- PAGE {p_num} -->\n{p_text}")
                     except Exception:
-                        break # Se alcanzaron todas las páginas conversibles
+                        break  # Se alcanzaron todas las páginas convertibles
 
                 raw_text = "\n\n".join(page_texts)
                 used_ocr = True
@@ -529,5 +532,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.4
-# File_Version: 0.5.3.1
+# File_Version: 0.5.3.3
 # Schema_Version: 0.5.3
