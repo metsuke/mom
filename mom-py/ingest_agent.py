@@ -18,8 +18,10 @@ from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, ItemAttributes, ItemMetadata, CURRENT_SCHEMA_VERSION
 from ocr_engine import MOMOCREngine
 
-# Importación del módulo de extracción en Python puro
-from utils.pdf_extractor import PurePythonPDFExtractor, PurePythonPNGWriter
+try:
+    from utils.pdf_extractor import PurePythonPDFExtractor, PurePythonPNGWriter
+except ModuleNotFoundError:
+    from pdf_extractor import PurePythonPDFExtractor, PurePythonPNGWriter
 
 
 def calculate_sha256(file_path: Path) -> str:
@@ -51,54 +53,34 @@ def render_progress_bar(current: int, total: int, prefix: str = "", bar_length: 
 
 def extract_pdf_images_pure_python(pdf_path: Path, output_dir: Path, total_pages: int) -> List[Path]:
     """
-    Extrae las imágenes de las páginas del PDF usando PurePythonPDFExtractor y PurePythonPNGWriter,
-    evitando cuadros negros e invirtiendo colores cuando sea necesario.
+    Renderiza y exporta TODAS las páginas del PDF como imágenes PNG a 8 bits (Grayscale)
+    usando PurePythonPDFExtractor y PurePythonPNGWriter (cero dependencias externas).
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     pdf_stem = pdf_path.stem
     image_files = []
 
-    # Verificar si las imágenes ya fueron extraídas previamente
-    existing = sorted(list(output_dir.glob(f"{pdf_stem}_*.png")) + list(output_dir.glob(f"{pdf_stem}_*.pgm")))
-    if len(existing) >= total_pages and total_pages > 0:
-        return existing[:total_pages]
-
     extractor = PurePythonPDFExtractor(str(pdf_path))
-    page_counter = 1
+    real_pages_count = extractor.get_pages_count() or total_pages
 
-    for obj_id, obj_data in extractor.objects.items():
-        if page_counter > total_pages:
-            break
-        
-        img_info = extractor.extract_image_xobject(obj_id)
-        if not img_info:
-            continue
+    print(f"🖼️ [RENDERIZADOR SOBERANO] Exportando {real_pages_count} página(s) a imágenes PNG...")
 
-        w = img_info["width"]
-        h = img_info["height"]
-        raw_bytes = img_info["bytes"]
-        is_gray = img_info["is_grayscale"]
+    for page_idx in range(real_pages_count):
+        formatted_page = f"{page_idx + 1:04d}"
+        target_img = output_dir / f"{pdf_stem}_{formatted_page}.png"
 
-        # Generar PNG en Python puro
-        png_data = PurePythonPNGWriter.encode_png(w, h, raw_bytes, is_gray)
-        target_img = output_dir / f"{pdf_stem}_{page_counter:04d}.png"
-        with open(target_img, "wb") as f_png:
-            f_png.write(png_data)
+        width, height = 600, 800
+        pixel_bytes = extractor.render_page_to_bytes(page_idx, width=width, height=height)
+        png_bytes = PurePythonPNGWriter.encode_png(width, height, pixel_bytes, is_grayscale=True)
+
+        with open(target_img, "wb") as f_out:
+            f_out.write(png_bytes)
 
         image_files.append(target_img)
-        page_counter += 1
+        render_progress_bar(page_idx + 1, real_pages_count, prefix="  • Progreso PNG:")
 
-    # Rellenar con imágenes de respaldo si faltan páginas
-    for p_num in range(1, total_pages + 1):
-        target_img = output_dir / f"{pdf_stem}_{p_num:04d}.png"
-        if not target_img.exists():
-            png_fallback = PurePythonPNGWriter.encode_png(100, 100, b'\xFF' * 10000, True)
-            with open(target_img, "wb") as f_out:
-                f_out.write(png_fallback)
-            if target_img not in image_files:
-                image_files.append(target_img)
-
-    return sorted(image_files[:total_pages])
+    print("\n✅ [RENDERIZADOR SOBERANO] Exportación PNG completada con éxito.")
+    return image_files
 
 
 def extract_text_from_file(file_path: Path) -> str:
@@ -130,7 +112,13 @@ def extract_text_from_file(file_path: Path) -> str:
 
     print(f"🔍 [EXTRACTOR NATIVO] Páginas detectadas en el árbol del PDF: {total_pages}")
 
-    # Extraer texto directo de los flujos del PDF
+    # 2. Colección de Imágenes <pdf>_imgs/ mediante PurePythonPNGWriter
+    imgs_dir = file_path.parent / f"{file_path.stem}_imgs"
+    print(f"🖼️ [GESTOR IMÁGENES] Preparando colección en: {imgs_dir.name}/ ({total_pages} páginas)")
+    image_files = extract_pdf_images_pure_python(file_path, imgs_dir, total_pages)
+    print(f"✅ [GESTOR IMÁGENES] Colección generada con {len(image_files)} archivo(s) PNG.")
+
+    # 3. Extraer texto directo de los flujos del PDF
     full_native_text = []
     for obj_id, obj_data in extractor.objects.items():
         stream_bytes = extractor.extract_stream_content(obj_data)
@@ -143,13 +131,7 @@ def extract_text_from_file(file_path: Path) -> str:
     if len(raw_native_str.strip()) > 100:
         native_pages_map[1] = raw_native_str
 
-    # 2. Colección de Imágenes <pdf>_imgs/ mediante PurePythonPNGWriter
-    imgs_dir = file_path.parent / f"{file_path.stem}_imgs"
-    print(f"🖼️ [GESTOR IMÁGENES] Preparando colección en: {imgs_dir.name}/ ({total_pages} páginas)")
-    image_files = extract_pdf_images_pure_python(file_path, imgs_dir, total_pages)
-    print(f"✅ [GESTOR IMÁGENES] Colección generada con {len(image_files)} archivo(s) PNG.")
-
-    # 3. Fallback a OCR si la capa de texto nativa está vacía o es muy reducida
+    # 4. Fallback a OCR si la capa de texto nativa está vacía o es muy reducida
     ocr_pages_map: Dict[int, str] = {}
     if len(raw_native_str.strip()) < 100:
         try:
@@ -168,7 +150,7 @@ def extract_text_from_file(file_path: Path) -> str:
         except Exception as ocr_err:
             print(f"\n❌ [MOTOR OCR] Error en la ejecución ({ocr_err}).")
 
-    # 4. Combinación y Construcción Final
+    # 5. Combinación y Construcción Final
     combined_pages = []
     all_pages = sorted(list(set(list(native_pages_map.keys()) + list(ocr_pages_map.keys()))))
     if not all_pages:
@@ -629,5 +611,5 @@ if __name__ == "__main__":
     main()
 
 # App Version: 0.5.2
-# Script Version: 0.5.2.2
+# Script Version: 0.5.2.7
 # Compatible Schema: 0.5.2
