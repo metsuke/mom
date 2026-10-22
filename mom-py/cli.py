@@ -453,8 +453,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
             from ingest_agent import MOMMultilingualIngestionAgent
             agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
             res = agent.ingest_registered_work(work_dir)
-            if res.get("status") == "PAUSED_MISSING_TRANSLATION":
-                print("ℹ️ Recuérdalo: añade la traducción en Markdown y vuelve a ejecutar la opción [3] para generar las propuestas.")
+            input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
 
     elif opt == "3":
         print("\n--- 🤖 SELECCIONAR OBRA REGISTRADA PARA TROCEO AGÉNTICO ---")
@@ -468,6 +467,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
 
         if not registered_works:
             print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+            input("\n🔻 Presiona [Enter] para continuar...")
             return
 
         print("Obras disponibles para troceo:")
@@ -482,13 +482,13 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
             target_work_dir = registered_works[w_idx]
         except (ValueError, IndexError):
             print("❌ Selección no válida.")
+            input("\n🔻 Presiona [Enter] para continuar...")
             return
 
         from ingest_agent import MOMMultilingualIngestionAgent
         agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
         res = agent.ingest_registered_work(target_work_dir)
-        if res.get("status") == "PAUSED_MISSING_TRANSLATION":
-            print("ℹ️ Proceso en pausa hasta recibir el archivo de traducción en español.")
+        input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
 
     elif opt == "4":
         print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
@@ -1566,5 +1566,5 @@ if __name__ == "__main__":
     main()
 
 # Version: 0.5.4
-# File_Version: 0.5.3.2
+# File_Version: 0.5.3.3
 # Schema_Version: 0.5.3

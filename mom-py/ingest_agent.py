@@ -45,15 +45,19 @@ def extract_text_from_file(file_path: Path) -> str:
     used_ocr = False
 
     if ext == ".pdf":
+        print(f"📄 Procesando archivo PDF: {file_path.name}")
         try:
             extractor = MOMPurePDFExtractor(file_path)
             extracted = extractor.extract_full_text_with_page_markers()
             
-            # FILTRADO STRICTO: Eliminar comentarios de página HTML para evaluar el contenido real
+            # FILTRADO ESTRICTO: Eliminar comentarios de página HTML para evaluar el contenido real
             clean_content = re.sub(r'<!--\s*PAGE\s+\d+\s*-->', '', extracted, flags=re.IGNORECASE).strip()
+            
+            print(f"📊 Longitud bruta extraída: {len(extracted)} caracteres. Contenido de texto útil: {len(clean_content)} caracteres.")
             
             if len(clean_content) > 100:
                 raw_text = extracted
+                print("✅ Capa de texto nativa detectada y extraída con éxito.")
             else:
                 print(f"⚠️ Capa de texto vacía o insuficiente ({len(clean_content)} caracteres útiles). Activando fallback a MOMOCREngine...")
         except Exception as e:
@@ -66,12 +70,14 @@ def extract_text_from_file(file_path: Path) -> str:
                 temp_pgm_dir = file_path.parent / "_temp_pgm"
                 temp_pgm_dir.mkdir(exist_ok=True)
                 
+                print("⚙️ Ejecutando renderizado PGM y OCR página a página...")
                 page_texts = []
                 for p_num in range(1, 500):  # Límite superior de seguridad
                     try:
                         pgm_file = ocr.convert_pdf_page_to_pgm(file_path, p_num, temp_pgm_dir)
                         p_text = ocr.process_pgm_page(pgm_file)
                         page_texts.append(f"<!-- PAGE {p_num} -->\n{p_text}")
+                        print(f"  • Página {p_num}: {len(p_text)} caracteres reconocidos por OCR.")
                     except Exception:
                         break  # Se alcanzaron todas las páginas convertibles
 
