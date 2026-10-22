@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 import json
 import re
 import datetime
@@ -16,8 +16,11 @@ if str(current_dir) not in sys.path:
 
 from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, ItemAttributes, ItemMetadata, CURRENT_SCHEMA_VERSION
-from pdf_parser import MOMPurePDFExtractor
 from ocr_engine import MOMOCREngine
+
+# Importación del módulo de extracción en Python puro
+from utils.pdf_extractor import PurePythonPDFExtractor, PurePythonPNGWriter
+
 
 def calculate_sha256(file_path: Path) -> str:
     """Calcula el hash SHA-256 de cualquier archivo para garantizar la cadena de custodia."""
@@ -27,6 +30,7 @@ def calculate_sha256(file_path: Path) -> str:
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
 
+
 def clean_extracted_line(line_str: str) -> str:
     """Limpia marcas de agua, pies de página y encabezados ruidosos."""
     if "everyspec.com" in line_str.lower():
@@ -34,6 +38,7 @@ def clean_extracted_line(line_str: str) -> str:
     if re.search(r'downloaded from https?://', line_str, re.IGNORECASE):
         return ""
     return line_str.strip()
+
 
 def render_progress_bar(current: int, total: int, prefix: str = "", bar_length: int = 30) -> None:
     """Renderiza una barra de progreso limpia en la terminal."""
@@ -43,99 +48,65 @@ def render_progress_bar(current: int, total: int, prefix: str = "", bar_length: 
     sys.stdout.write(f"\r{prefix} [{arrow}{spaces}] {int(percent * 100)}% ({current}/{total})")
     sys.stdout.flush()
 
-def get_total_pdf_pages_posix(pdf_path: Path) -> int:
-    """
-    Obtiene el número exacto de páginas reales parseando el árbol de objetos /Pages
-    en binario puro usando solo la librería estándar de Python (0 dependencias).
-    """
-    try:
-        with open(pdf_path, "rb") as f:
-            content = f.read()
-
-        # Parsear catálogos de páginas del arbol de objetos del PDF
-        page_tree_counts = re.findall(rb'/Type\s*/Pages\b[^>]*?/Count\s+(\d+)', content)
-        if page_tree_counts:
-            # Tomar la cuenta raíz declarada en el catálogo principal
-            return max(int(c.decode('ascii')) for c in page_tree_counts)
-
-        # Fallback: Parsear declaraciones directas de objetos de página en la tabla XREF/Objetos
-        page_objs = re.findall(rb'\b\d+\s+\d+\s+obj\b[^>]*?/Type\s*/Page\b', content)
-        if page_objs:
-            return len(page_objs)
-    except Exception:
-        pass
-    return 0
 
 def extract_pdf_images_pure_python(pdf_path: Path, output_dir: Path, total_pages: int) -> List[Path]:
     """
-    Extrae las imágenes de las páginas del PDF mediante descompresión zlib
-    de los streams de imagen y genera los archivos <pdf_stem>_XXXX.png / PGM
-    en la carpeta <pdf_stem>_imgs/ sin usar herramientas externas (pdftoppm, etc.).
+    Extrae las imágenes de las páginas del PDF usando PurePythonPDFExtractor y PurePythonPNGWriter,
+    evitando cuadros negros e invirtiendo colores cuando sea necesario.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     pdf_stem = pdf_path.stem
     image_files = []
 
     # Verificar si las imágenes ya fueron extraídas previamente
-    existing = sorted(list(output_dir.glob(f"{pdf_stem}_*.png")) + list(output_dir.glob(f"{pdf_stem}_*.pbm")) + list(output_dir.glob(f"{pdf_stem}_*.pgm")))
+    existing = sorted(list(output_dir.glob(f"{pdf_stem}_*.png")) + list(output_dir.glob(f"{pdf_stem}_*.pgm")))
     if len(existing) >= total_pages and total_pages > 0:
         return existing[:total_pages]
 
-    try:
-        with open(pdf_path, "rb") as f:
-            content = f.read()
+    extractor = PurePythonPDFExtractor(str(pdf_path))
+    page_counter = 1
 
-        # Localizar streams de imágenes embebidas o vectores por página
-        stream_matches = list(re.finditer(rb'stream\r?\n(.*?)\r?\nendstream', content, re.DOTALL))
+    for obj_id, obj_data in extractor.objects.items():
+        if page_counter > total_pages:
+            break
         
-        page_idx = 1
-        for match in stream_matches:
-            if page_idx > total_pages:
-                break
-                
-            stream_bytes = match.group(1)
-            # Descomprimir si es FlateDecode
-            try:
-                decompressed = zlib.decompress(stream_bytes)
-            except Exception:
-                decompressed = stream_bytes
+        img_info = extractor.extract_image_xobject(obj_id)
+        if not img_info:
+            continue
 
-            # Escribir en formato de imagen POSIX (PBM/PGM) legible por el motor OCR de Python
-            formatted_page = f"{page_idx:04d}"
-            target_img = output_dir / f"{pdf_stem}_{formatted_page}.png"
+        w = img_info["width"]
+        h = img_info["height"]
+        raw_bytes = img_info["bytes"]
+        is_gray = img_info["is_grayscale"]
 
-            if not target_img.exists():
-                # Escribir marcador de página como imagen de respaldo binaria
-                header = f"P5\n500 500\n255\n".encode('ascii')
-                img_data = header + (decompressed[:250000] if len(decompressed) >= 250000 else decompressed.ljust(250000, b'\x00'))
-                with open(target_img, "wb") as img_out:
-                    img_out.write(img_data)
+        # Generar PNG en Python puro
+        png_data = PurePythonPNGWriter.encode_png(w, h, raw_bytes, is_gray)
+        target_img = output_dir / f"{pdf_stem}_{page_counter:04d}.png"
+        with open(target_img, "wb") as f_png:
+            f_png.write(png_data)
 
-            image_files.append(target_img)
-            page_idx += 1
+        image_files.append(target_img)
+        page_counter += 1
 
-    except Exception as e:
-        print(f"\n⚠️ [EXTRACTOR NATIVO] Nota en la extracción binaria de imágenes: {e}")
-
-    # Asegurar que existan contenedores para las N páginas totales
+    # Rellenar con imágenes de respaldo si faltan páginas
     for p_num in range(1, total_pages + 1):
-        formatted_page = f"{p_num:04d}"
-        target_img = output_dir / f"{pdf_stem}_{formatted_page}.png"
+        target_img = output_dir / f"{pdf_stem}_{p_num:04d}.png"
         if not target_img.exists():
-            header = f"P5\n100 100\n255\n".encode('ascii')
-            with open(target_img, "wb") as img_out:
-                img_out.write(header + b'\xFF' * 10000)
-        if target_img not in image_files:
-            image_files.append(target_img)
+            png_fallback = PurePythonPNGWriter.encode_png(100, 100, b'\xFF' * 10000, True)
+            with open(target_img, "wb") as f_out:
+                f_out.write(png_fallback)
+            if target_img not in image_files:
+                image_files.append(target_img)
 
     return sorted(image_files[:total_pages])
+
 
 def extract_text_from_file(file_path: Path) -> str:
     """
     ESTRATEGIA HÍBRIDA MULTI-CAPA PURE-PYTHON POSIX:
-    1. Parseo de páginas nativas sin dependencias externas.
-    2. Generación persistente de imágenes <pdf>_XXXX.png en <pdf>_imgs/ usando Python puro.
-    3. Extracción de capa de texto nativa + OCR por glifos con deduplicación.
+    1. Parseo nativo de PDF y recuento exacto vía PurePythonPDFExtractor.
+    2. Generación persistente de imágenes PNG sin librerías externas.
+    3. Extracción de capa de texto nativa + Fallback a OCR por glifos.
     """
     ext = file_path.suffix.lower()
     
@@ -152,66 +123,60 @@ def extract_text_from_file(file_path: Path) -> str:
     print(f" 📄 INICIANDO EXTRACCIÓN HÍBRIDA MULTI-CAPA PERSISTENTE (PURE-PYTHON): {file_path.name}")
     print("========================================================================")
 
-    # 1. Extracción Nativa por PDF Extractor Pure-Python
+    # 1. Extracción Nativa e Identificación de Páginas Realistas por Python Puro
     native_pages_map: Dict[int, str] = {}
-    try:
-        extractor = MOMPurePDFExtractor(file_path)
-        extracted_native = extractor.extract_full_text_with_page_markers()
-        
-        page_chunks = re.split(r'<!--\s*PAGE\s+(\d+)\s*-->', extracted_native, flags=re.IGNORECASE)
-        for i in range(1, len(page_chunks), 2):
-            p_num = int(page_chunks[i])
-            p_text = page_chunks[i+1].strip()
-            native_pages_map[p_num] = p_text
+    extractor = PurePythonPDFExtractor(str(file_path))
+    total_pages = extractor.get_pages_count() or 1
 
-        print(f"🔍 [EXTRACTOR NATIVO] Detectadas {len(native_pages_map)} página(s) con capa de texto.")
-    except Exception as e:
-        print(f"⚠️ [EXTRACTOR NATIVO] Fallo parcial ({e}). Continuando únicamente con OCR...")
+    print(f"🔍 [EXTRACTOR NATIVO] Páginas detectadas en el árbol del PDF: {total_pages}")
 
-    # 2. Conteo de Páginas Reales y Generación de la Colección de Imágenes <pdf>_imgs/
-    total_pages = get_total_pdf_pages_posix(file_path) or max(list(native_pages_map.keys()) + [1])
+    # Extraer texto directo de los flujos del PDF
+    full_native_text = []
+    for obj_id, obj_data in extractor.objects.items():
+        stream_bytes = extractor.extract_stream_content(obj_data)
+        if stream_bytes:
+            decoded = stream_bytes.decode("latin1", errors="ignore")
+            if "BT" in decoded and "ET" in decoded:
+                full_native_text.append(decoded)
+
+    raw_native_str = "\n".join(full_native_text)
+    if len(raw_native_str.strip()) > 100:
+        native_pages_map[1] = raw_native_str
+
+    # 2. Colección de Imágenes <pdf>_imgs/ mediante PurePythonPNGWriter
     imgs_dir = file_path.parent / f"{file_path.stem}_imgs"
-    
-    print(f"🖼️ [GESTOR IMÁGENES] Preparando colección de imágenes en: {imgs_dir.name}/ ({total_pages} páginas)")
+    print(f"🖼️ [GESTOR IMÁGENES] Preparando colección en: {imgs_dir.name}/ ({total_pages} páginas)")
     image_files = extract_pdf_images_pure_python(file_path, imgs_dir, total_pages)
-    print(f"✅ [GESTOR IMÁGENES] Colección generada con {len(image_files)} archivo(s) de imagen (XXXX.png).")
+    print(f"✅ [GESTOR IMÁGENES] Colección generada con {len(image_files)} archivo(s) PNG.")
 
-    # 3. OCR sobre cada imagen de la colección usando el motor agéntico puro
+    # 3. Fallback a OCR si la capa de texto nativa está vacía o es muy reducida
     ocr_pages_map: Dict[int, str] = {}
-    try:
-        ocr = MOMOCREngine()
-        print(f"\n⚙️ [MOTOR OCR] Procesando {len(image_files)} página(s) desde la carpeta de imágenes...\n")
-        
-        for idx, img_path in enumerate(image_files, 1):
-            render_progress_bar(idx, len(image_files), prefix="  • Progreso OCR:")
-            try:
-                page_match = re.search(r'_(\d{4})\.png$', img_path.name)
-                p_num = int(page_match.group(1)) if page_match else idx
-                
-                p_text = ocr.process_pgm_page(img_path).strip()
-                ocr_pages_map[p_num] = p_text
-            except Exception:
-                continue
+    if len(raw_native_str.strip()) < 100:
+        try:
+            ocr = MOMOCREngine()
+            print(f"\n⚙️ [MOTOR OCR] Procesando {len(image_files)} página(s) mediante glifos...\n")
+            
+            for idx, img_path in enumerate(image_files, 1):
+                render_progress_bar(idx, len(image_files), prefix="  • Progreso OCR:")
+                try:
+                    p_text = ocr.process_pgm_page(img_path).strip()
+                    ocr_pages_map[idx] = p_text
+                except Exception:
+                    continue
 
-        print("\n✅ [MOTOR OCR] Procesamiento de colección de imágenes completado.")
-    except Exception as ocr_err:
-        print(f"\n❌ [MOTOR OCR] Error en la ejecución ({ocr_err}).")
+            print("\n✅ [MOTOR OCR] Procesamiento completado.")
+        except Exception as ocr_err:
+            print(f"\n❌ [MOTOR OCR] Error en la ejecución ({ocr_err}).")
 
-    # 4. Combinación Híbrida y Streaming Verboso de Párrafos
+    # 4. Combinación y Construcción Final
     combined_pages = []
     all_pages = sorted(list(set(list(native_pages_map.keys()) + list(ocr_pages_map.keys()))))
     if not all_pages:
         all_pages = list(range(1, total_pages + 1))
 
-    print("\n------------------------------------------------------------------------")
-    print(" 🧩 STREAMING DE CONSTRUCCIÓN Y FUSIÓN PÁRRAFO A PÁRRAFO EN TIEMPO REAL")
-    print("------------------------------------------------------------------------")
-
     for p in all_pages:
         nat_txt = native_pages_map.get(p, "").strip()
         ocr_txt = ocr_pages_map.get(p, "").strip()
-
-        print(f"\n📖 [PÁGINA {p}/{len(all_pages)}] Fusionando capas (Nativa: {len(nat_txt)} chars | OCR: {len(ocr_txt)} chars)")
 
         fused_lines = []
         seen_lines = set()
@@ -223,20 +188,15 @@ def extract_text_from_file(file_path: Path) -> str:
                 fused_lines.append(cleaned)
 
         page_body = "\n".join(fused_lines)
-        
-        paragraphs = [p_str.strip() for p_str in page_body.split("\n\n") if p_str.strip()]
-        for p_idx, para in enumerate(paragraphs, 1):
-            preview = para[:120].replace("\n", " ")
-            print(f"   └─ 📝 [Párrafo {p_idx}] {preview}...")
-
         combined_pages.append(f"<!-- PAGE {p} -->\n{page_body}")
 
     final_full_text = "\n\n".join(combined_pages)
     print("\n========================================================================")
-    print(f" ✅ EXTRACCIÓN HÍBRIDA REALIZADA CON ÉXITO: Total {len(final_full_text)} caracteres.")
+    print(f" ✅ EXTRACCIÓN REALIZADA CON ÉXITO: Total {len(final_full_text)} caracteres.")
     print("========================================================================\n")
     
     return final_full_text
+
 
 def ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
     """Crea o actualiza el project.json de un nodo en el disco respetando sus padres y visibilidad."""
@@ -267,6 +227,7 @@ def ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: 
 
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
+
 
 class MultilingualDeterministicParser:
     """Parser determinista que extrae la jerarquía de despiece y soporta fuentes pareadas."""
@@ -353,7 +314,6 @@ class MultilingualDeterministicParser:
                     current_page_end = next_page
                 else:
                     current_page_start = int(page_match.group(1)) if page_match else (current_page_start + 1 if current_page_start else 1)
-                    current_page_start = current_page_start
 
                 cleaned_line = re.sub(r'<!--\s*PAGE\s+\d+\s*-->', '', line_str, flags=re.IGNORECASE).strip()
                 cleaned_line = cleaned_line.replace('\f', '').strip()
@@ -381,8 +341,9 @@ class MultilingualDeterministicParser:
         flush_paragraph()
         return nodes, extracted_references
 
+
 class MOMMultilingualIngestionAgent:
-    """Agente Ingestor Multilingüe con soporte para pares RAW (Original + Traducción) y Cero Traducción Automática."""
+    """Agente Ingestor Multilingüe con soporte para pares RAW y Cero Traducción Automática."""
 
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
@@ -630,6 +591,7 @@ class MOMMultilingualIngestionAgent:
             "proposals_generated": generated_proposals
         }
 
+
 def main():
     parser = argparse.ArgumentParser(description="MOM Agent: Ingestor Multilingüe Soberano")
     parser.add_argument("--original", required=True, help="Ruta al archivo original (ej. PDF/MD en inglés)")
@@ -648,7 +610,7 @@ def main():
     data_dir = current_dir.parent / "data"
 
     agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
-    res = agent.ingest_work(
+    agent.ingest_work(
         original_file=Path(args.original),
         translation_file=Path(args.translation) if args.translation else None,
         author_id=args.author,
@@ -662,9 +624,10 @@ def main():
         is_spanish_original=args.spanish_original
     )
 
+
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.4
-# File_Version: 0.5.4.1
-# Schema_Version: 0.5.3
+# App Version: 0.5.2
+# Script Version: 0.5.2.2
+# Compatible Schema: 0.5.2
