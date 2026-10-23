@@ -18,6 +18,7 @@ from projects import MOMProjectManager as ProjectManager, MOMInheritedRepository
 from compiler import MOMCompiler
 from schemas import MOMItem, ESAPhase, PriorityEnum, StatusEnum, VerificationMethod, ItemAttributes, ItemMetadata, CURRENT_SCHEMA_VERSION
 
+
 def ask_confirmation(prompt: str, default: bool = False) -> bool:
     """Solicita confirmación explícita al usuario humano [s/N]."""
     suffix = " [S/n]: " if default else " [s/N]: "
@@ -30,6 +31,7 @@ def ask_confirmation(prompt: str, default: bool = False) -> bool:
         if choice in ['n', 'no']:
             return False
         print("⚠️ Respuesta no válida. Escribe 's' o 'n'.")
+
 
 def _curses_multi_select(stdscr, title_header: str, options: List[str], preselected: List[str]) -> List[str]:
     """Renderiza un menú TUI interactivo usando curses para marcar con espacio y confirmar con Enter."""
@@ -69,6 +71,7 @@ def _curses_multi_select(stdscr, title_header: str, options: List[str], preselec
 
     return [options[i].split(" | ")[0] for i, is_sel in enumerate(selected) if is_sel]
 
+
 def select_parent_projects_interactively(pm: ProjectManager, exclude_project: Optional[str] = None, preselected: Optional[List[str]] = None) -> List[str]:
     """Obtiene proyectos clasificados por categoría (Core, Obras/Autores, Patentes, Auditorías)."""
     available_dirs = [
@@ -97,6 +100,7 @@ def select_parent_projects_interactively(pm: ProjectManager, exclude_project: Op
         print(f"⚠️ No se pudo cargar la interfaz TUI ({e}).")
         return []
 
+
 def select_parent_items_interactively(inherited_repo: MOMInheritedRepository, current_phase: ESAPhase, preselected: Optional[List[str]] = None) -> List[str]:
     """Muestra un menú TUI navegable con ID y Título para seleccionar los parent_ids de un ítem atómico."""
     all_items = inherited_repo.list_all_consolidated()
@@ -115,6 +119,7 @@ def select_parent_items_interactively(inherited_repo: MOMInheritedRepository, cu
     except Exception as e:
         print(f"⚠️ No se pudo cargar la interfaz TUI ({e}).")
         return []
+
 
 def get_next_auto_id(inherited_repo: MOMInheritedRepository, phase: ESAPhase, project_id: str, raw_input_id: str) -> str:
     """Calcula y asigna el siguiente número disponible correlativo si el ID introducido no termina en número."""
@@ -139,6 +144,7 @@ def get_next_auto_id(inherited_repo: MOMInheritedRepository, phase: ESAPhase, pr
     next_num = max(existing_numbers) + 1 if existing_numbers else 1
     return f"{prefix}-{next_num:03d}"
 
+
 # ==============================================================================
 # MÓDULOS DE BIBLIOTECA, PATENTES, AUDITORÍA Y GIT SOBERANO
 # ==============================================================================
@@ -150,6 +156,7 @@ def _calculate_sha256(file_path: Path) -> str:
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     return sha256_hash.hexdigest()
+
 
 def execute_sovereign_git_push(repo_root: Path, commit_msg: str) -> bool:
     """Ejecuta atómicamente: git add . -> git commit -m ... -> git push origin main --force"""
@@ -169,6 +176,7 @@ def execute_sovereign_git_push(repo_root: Path, commit_msg: str) -> bool:
     except subprocess.CalledProcessError as e:
         print(f"❌ [GIT SOBERANO] Fallo en la ejecución del comando Git: {e}")
         return False
+
 
 def menu_git_sovereign_sync() -> None:
     """Menú de sincronización soberana directa desde la CLI (Soporta entrada multilínea)."""
@@ -200,6 +208,7 @@ def menu_git_sovereign_sync() -> None:
 
     if ask_confirmation("¿Ejecutar git add . + commit + push --force a main con este mensaje?"):
         execute_sovereign_git_push(repo_root, commit_msg)
+
 
 def _untrack_and_purge_private_path(root_dir: Path, relative_path: str) -> None:
     """
@@ -246,6 +255,7 @@ def _untrack_and_purge_private_path(root_dir: Path, relative_path: str) -> None:
         print("  ⚡ [PURGA AUTOMÁTICA] Sincronizando árbol limpio con remoto...")
         execute_sovereign_git_push(root_dir, f"fix(security): purga soberana de rastro privado de {clean_path}")
 
+
 def append_to_root_gitignore(repo_root: Path, rule: str) -> None:
     """Añade una regla al .gitignore de la raíz del repositorio si no está presente."""
     root_gitignore = repo_root / ".gitignore"
@@ -259,6 +269,7 @@ def append_to_root_gitignore(repo_root: Path, rule: str) -> None:
     if rule_clean not in lines:
         with open(root_gitignore, "a", encoding="utf-8") as f:
             f.write(f"\n{rule_clean}\n")
+
 
 def refresh_all_gitignores(pm: ProjectManager) -> None:
     """Recorre todos los proyectos en disco, fuerza el uso del .gitignore de la raíz y limpia rastros de Git."""
@@ -306,6 +317,7 @@ def refresh_all_gitignores(pm: ProjectManager) -> None:
 
     print(f"✅ Verificación completada ({private_count} proyectos privados verificados y aislados de Git).\n")
 
+
 def _ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents: List[str], is_private: bool, desc: str) -> None:
     """Crea o actualiza un nodo de proyecto en disco manteniendo su estructura JSON e aislando visibilidad privada."""
     proj_dir = pm.projects_root / proj_id
@@ -342,6 +354,7 @@ def _ensure_project_exists(pm: ProjectManager, proj_id: str, name: str, parents:
         append_to_root_gitignore(repo_root, f"data/projects/{proj_id}/")
         _untrack_and_purge_private_path(repo_root, f"data/projects/{proj_id}/")
 
+
 def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión de la Biblioteca Privada (data/library/bib/) y Corpus Bibliográfico."""
     bib_dir = data_dir / "library" / "bib"
@@ -354,12 +367,14 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
     print("=======================================================")
     print("  [1] Inicializar Nodo Autor Consolidador (ej. AUTHOR-W3C)")
     print("  [2] Registrar OBRA FORMAL Y MATRIZ RAW (ej. AUTHOR-W3C-WCAG22)")
-    print("  [3] Ejecutar TROCEO AGÉNTICO (con Deduplicación RAW y OCR) sobre una Obra Registrada")
+    print("  [3] Ejecutar TROCEO AGÉNTICO Estándar (Zero-Deps)")
+    print("  [3b] Ejecutar INGESTA AVANZADA PDF (PyMuPDF + OCR)")
+    print("  [3c] Ejecutar TROCEO DIRECTO desde MARKDOWN (Omite PDF)")
     print("  [4] Ejecutar Kill-Switch / Revocación de Cita Literal")
     print("  [0] Volver al Menú Principal")
     print("-------------------------------------------------------")
 
-    opt = input("Selecciona una opción [0-4]: ").strip()
+    opt = input("Selecciona una opción [0-4, 3b, 3c]: ").strip().lower()
 
     if opt == "1":
         author_id = input("ID del Autor Consolidador (ej. AUTHOR-W3C): ").strip().upper()
@@ -456,7 +471,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
             input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
 
     elif opt == "3":
-        print("\n--- 🤖 SELECCIONAR OBRA REGISTRADA PARA TROCEO AGÉNTICO ---")
+        print("\n--- 🤖 SELECCIONAR OBRA REGISTRADA PARA TROCEO AGÉNTICO ESTÁNDAR ---")
         author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
         registered_works = []
 
@@ -488,6 +503,64 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         from ingest_agent import MOMMultilingualIngestionAgent
         agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
         res = agent.ingest_registered_work(target_work_dir)
+        input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
+
+    elif opt == "3b":
+        print("\n--- 🚀 INGESTA AVANZADA PDF (PyMuPDF + OCR Auto-instalable) ---")
+        pdf_input = input("Introduce la ruta absoluta o relativa al PDF: ").strip()
+        if not pdf_input:
+            print("❌ Ruta de archivo no válida.")
+            return
+        
+        pdf_path = Path(pdf_input).expanduser().resolve()
+        if not pdf_path.exists():
+            print(f"❌ El archivo '{pdf_path}' no existe.")
+            return
+
+        out_dir_str = input(f"Carpeta de destino [{pdf_path.parent}]: ").strip()
+        out_dir = Path(out_dir_str).expanduser().resolve() if out_dir_str else pdf_path.parent
+
+        try:
+            from pdf_extractor_advanced import extract_pdf_advanced
+            res_md = extract_pdf_advanced(str(pdf_path), str(out_dir))
+            print(f"✅ Ingesta avanzada completada con éxito: {res_md}")
+        except Exception as e:
+            print(f"❌ Error al ejecutar ingesta avanzada: {e}")
+            
+        input("\n🔻 Presiona [Enter] para continuar...")
+
+    elif opt == "3c":
+        print("\n--- 📝 TROCEO DIRECTO DESDE MARKDOWN (.md) (Omite PDF) ---")
+        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+        registered_works = []
+
+        for ad in author_dirs:
+            for wd in ad.iterdir():
+                if wd.is_dir() and (wd / "metadata.json").exists():
+                    registered_works.append(wd)
+
+        if not registered_works:
+            print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+            input("\n🔻 Presiona [Enter] para continuar...")
+            return
+
+        print("Obras disponibles para troceo directo desde .md:")
+        for i, wd in enumerate(registered_works, 1):
+            with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+
+        try:
+            w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+            target_work_dir = registered_works[w_idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            input("\n🔻 Presiona [Enter] para continuar...")
+            return
+
+        from ingest_agent import MOMMultilingualIngestionAgent
+        agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
+        res = agent.ingest_registered_work_from_markdown(target_work_dir)
         input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
 
     elif opt == "4":
@@ -545,6 +618,7 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
             print("🛑 Kill-Switch activado. La fuente matriz se ha bloqueado como PRIVADA y se purgará la cita literal.")
             repo_root = current_dir.parent
             execute_sovereign_git_push(repo_root, f"fix(security): activado kill-switch soberano para obra {meta.get('work_id')}")
+
 
 def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión del Pilar MOSPAT y Registro de Patentes (Freedom to Operate - FTO)."""
@@ -631,6 +705,7 @@ def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
             aut_str = f" | Autor: {d.get('author_id')}" if d.get("author_id") else ""
             print(f"  • {d.get('patent_id')}: {d.get('title')} [{st_str}]{aut_str} - Expiración: {d.get('expiry_year_global')}")
 
+
 def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
     """Gestión del Pilar MOSAUDIT, Auditoría de Código y Comparativa Declarado vs Decompilado."""
     audit_dir = data_dir / "library" / "audit"
@@ -715,6 +790,7 @@ def menu_audit_management(data_dir: Path, pm: ProjectManager) -> None:
             aut_str = f" | Autor: {d.get('author_id')}" if d.get("author_id") else ""
             print(f"  • Componente: {d.get('app_id')}{aut_str} | Hash SHA-256 Binario: {d.get('sha256_hash') or 'N/A'}")
 
+
 # ==============================================================================
 # FUNCIONES DE MENÚ PRINCIPAL Y CONFIGURACIÓN DE PROYECTOS
 # ==============================================================================
@@ -795,6 +871,7 @@ def menu_configure_global_settings(data_dir: Path) -> None:
                 json.dump(config, f, indent=2, ensure_ascii=False)
             print("✅ Exportación a Web Vault desactivada.")
 
+
 def menu_create_project(pm: ProjectManager) -> Optional[str]:
     print("\n--- 📁 CREAR NUEVO PROYECTO MOM (Esquema v0.5.3) ---")
     project_id = input("ID del proyecto (ej. MOSCON): ").strip().upper()
@@ -871,6 +948,7 @@ def menu_create_project(pm: ProjectManager) -> Optional[str]:
         print("🛑 Operación cancelada por el usuario.")
     return None
 
+
 def menu_view_project_details(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     """Muestra todos los datos de un proyecto e inspecciona su estructura y métricas."""
     print("\n--- 🔍 VISUALIZAR Y AUDITAR PROYECTO ---")
@@ -939,6 +1017,7 @@ def menu_view_project_details(pm: ProjectManager, active_project: Optional[str] 
         cnt = counts_by_phase.get(phase_name, 0)
         print(f"    - Fase {phase_name}: {cnt} elemento(s)")
     print("=======================================================")
+
 
 def menu_configure_project(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     print("\n--- ⚙️ CONFIGURAR PROYECTO (VISIBILIDAD, HERENCIA Y METADATOS) ---")
@@ -1052,6 +1131,7 @@ def menu_configure_project(pm: ProjectManager, active_project: Optional[str] = N
             json.dump(meta, f, indent=2, ensure_ascii=False)
         print("✅ Configuración del proyecto actualizada.")
 
+
 def menu_create_item(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     """CAMINO 1: Crear un elemento atómico NUEVO con ID correlativo automático."""
     print("\n--- ➕ CREAR NUEVA ESPECIFICACIÓN ATÓMICA (JSON) ---")
@@ -1135,6 +1215,7 @@ def menu_create_item(pm: ProjectManager, active_project: Optional[str] = None) -
             print(f"❌ Error al guardar el ítem: {e}")
     else:
         print("🛑 Escritura cancelada.")
+
 
 def menu_edit_item(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     """CAMINO 2: Seleccionar un elemento EXISTENTE de una lista para editarlo."""
@@ -1240,6 +1321,7 @@ def menu_edit_item(pm: ProjectManager, active_project: Optional[str] = None) -> 
     else:
         print("🛑 Edición cancelada.")
 
+
 def menu_compile_project(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     print("\n--- ⚙️ COMPILACIÓN DE DOCUMENTACIÓN ---")
     
@@ -1282,6 +1364,7 @@ def menu_compile_project(pm: ProjectManager, active_project: Optional[str] = Non
         print(f"✅ Compilación completada con éxito para '{target_project}'.")
     else:
         print("🛑 Compilación cancelada.")
+
 
 def menu_compile_all_projects(pm: ProjectManager) -> None:
     """Recorre y compila absolutamente todos los proyectos registrados en data/projects/."""
@@ -1327,6 +1410,7 @@ def menu_compile_all_projects(pm: ProjectManager) -> None:
         print(f"  • Proyectos procesados con éxito: {success_count}/{len(projects)}")
         print(f"  • Proyectos con errores/abortados: {error_count}")
         print(f"=======================================================")
+
 
 def menu_review_agent_proposal(pm: ProjectManager, active_project: Optional[str] = None) -> None:
     print("\n--- 🤖 REVISIÓN Y APROBACIÓN DE PROPUESTAS PENDIENTES DE IA ---")
@@ -1413,6 +1497,7 @@ def menu_review_agent_proposal(pm: ProjectManager, active_project: Optional[str]
             else:
                 print("⏸️ Propuesta mantenida en 'data/ai-proposals/' para revisión posterior.")
 
+
 def select_active_project(pm: ProjectManager) -> Optional[str]:
     """Permite seleccionar de forma transparente el proyecto de trabajo activo."""
     projs = [p.name for p in pm.projects_root.iterdir() if p.is_dir() and (p / "project.json").exists()]
@@ -1435,6 +1520,7 @@ def select_active_project(pm: ProjectManager) -> Optional[str]:
     except ValueError:
         print("❌ Entrada no válida.")
     return None
+
 
 def interactive_main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
@@ -1508,6 +1594,7 @@ def interactive_main() -> None:
         else:
             print("⚠️ Opción no válida. Por favor introduce un número entre 0 y 14.")
 
+
 def main() -> None:
     projects_dir = current_dir.parent / "data" / "projects"
     data_dir = current_dir.parent / "data"
@@ -1562,9 +1649,10 @@ def main() -> None:
     else:
         interactive_main()
 
+
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.4
-# File_Version: 0.5.3.3
+# Version: 0.5.5
+# File_Version: 0.5.5.0
 # Schema_Version: 0.5.3

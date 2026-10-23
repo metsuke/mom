@@ -347,6 +347,49 @@ class MOMMultilingualIngestionAgent:
         self.library_dir.mkdir(parents=True, exist_ok=True)
         self.proposals_dir.mkdir(parents=True, exist_ok=True)
 
+    def ingest_registered_work_from_markdown(self, work_dir: Path) -> Dict[str, Any]:
+        """
+        NUEVA OPCIÓN: Trocea directamente leyendo los ficheros Markdown (.md)
+        presentes en la carpeta split/ o raíz de la obra, omitiendo el escaneo del PDF.
+        """
+        meta_file = work_dir / "metadata.json"
+        if not meta_file.exists():
+            raise FileNotFoundError(f"❌ No se encontró metadata.json en {work_dir}")
+
+        with open(meta_file, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+        split_dir = work_dir / "split"
+        orig_md = split_dir / "original_extracted.md"
+        trans_md = split_dir / "translation_extracted.md"
+
+        if not orig_md.exists():
+            # Buscar cualquier archivo markdown en el directorio
+            md_candidates = list(work_dir.glob("*.md")) + list(split_dir.glob("*.md"))
+            if md_candidates:
+                orig_md = md_candidates[0]
+            else:
+                raise FileNotFoundError(f"❌ No se encontraron archivos .md en {work_dir} o {split_dir}")
+
+        print(f"\n📝 Troceando directamente desde Markdown (omitiendo re-escaneo de PDF)...")
+        print(f"  • Fichero Original MD: {orig_md.name}")
+        if trans_md.exists():
+            print(f"  • Fichero Traducción MD: {trans_md.name}")
+
+        return self.ingest_work(
+            original_file=orig_md,
+            translation_file=trans_md if trans_md.exists() else None,
+            author_id=meta.get("author_id"),
+            translator_author_id=None,
+            work_code=meta.get("work_id"),
+            title=meta.get("title", meta.get("work_id")),
+            publisher=meta.get("publisher", "Desconocido"),
+            year=meta.get("year", 2026),
+            license_type=meta.get("license_type", "Copyright"),
+            allow_public_export=meta.get("allow_full_text_export", False),
+            is_spanish_original=meta.get("is_spanish_original", False)
+        )
+
     def ingest_registered_work(self, work_dir: Path) -> Dict[str, Any]:
         """Ejecuta el troceo agéntico directamente leyendo la carpeta de una obra ya registrada por la CLI."""
         meta_file = work_dir / "metadata.json"
@@ -583,7 +626,7 @@ def main():
     parser.add_argument("--work", required=True, help="ID corto de la obra (ej. PSS05)")
     parser.add_argument("--title", required=True, help="Título completo de la obra")
     parser.add_argument("--publisher", default="ESA", help="Entidad emisora/editorial")
-    parser.add_argument("--year", type=int, default=1991, help="Año de publicación")
+    parser.add_argument("--year", type=int, default1991, help="Año de publicación")
     parser.add_argument("--license", default="Public Domain", help="Tipo de Licencia")
     parser.add_argument("--public", action="store_true", help="Permitir exportación pública completa")
     parser.add_argument("--spanish-original", action="store_true", help="Indica si el original ya viene en idioma español")
@@ -610,6 +653,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# App Version: 0.5.2
-# Script Version: 0.5.2.7
-# Compatible Schema: 0.5.2
+# App Version: 0.5.3
+# Script Version: 0.5.3.0
+# Compatible Schema: 0.5.3
