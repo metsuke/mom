@@ -71,60 +71,44 @@ class AtomicGraphParser:
     """
     Parser Atómico Jerárquico Causal para Metodología MOM / ESA PSS-05.
     Despieza el texto en:
-      - Páginas (COR)
       - Capítulos (URD)
-      - Secciones / Tablas (SRD)
-      - Párrafos / Filas de Tabla (ADD)
-      - Frases / Axiomas / Celdas (DDD)
-      - Bibliografía (COR-BIB)
-    Filtra automáticamente tablas de contenidos / índices.
+      - Secciones (SRD)
+      - Párrafos (ADD)
+      - Axiomas / Frases (DDD)
+    Filtra rigurosamente tablas de contenidos / índices para evitar contaminación en proposals.
     """
 
     @staticmethod
     def is_toc_line(line_str: str) -> bool:
-        """Combinación de filtros para detectar líneas pertenecientes a un Índice o Tabla de Contenidos."""
         clean = line_str.strip()
         if not clean:
             return False
-        
-        # Filtro 1: Puntos o guiones suspensivos de relleno hacia un número de página (ej: '1.2 Introducción ..... 14')
         if re.search(r'[\.\-\_\s]{4,}\s*\d+\s*$', clean):
             return True
-        
-        # Filtro 2: Patrón estricto de número de sección + título + número de página al final
         if re.match(r'^(?:\d+\.)+\d*\s+[\w\s\.\,\-\(\)]+\s+\d+$', clean, re.IGNORECASE):
             return True
-
         return False
 
     @staticmethod
     def is_toc_header(header_text: str) -> bool:
-        """Detecta encabezados explícitos de Índice / Table of Contents."""
         clean = header_text.lower().strip()
         toc_keywords = ["table of contents", "contents", "index", "índice", "indice", "tabla de contenidos", "tabla de contenido"]
         return any(kw in clean for kw in toc_keywords)
 
     @staticmethod
     def is_bibliography_header(header_text: str) -> bool:
-        """Detecta encabezados de Bibliografía o Referencias."""
         clean = header_text.lower().strip()
         keywords = ["bibliografía", "bibliografia", "references", "referencias", "works cited", "citaciones", "fuentes"]
         return any(kw in clean for kw in keywords)
 
     @classmethod
     def parse_document_to_graph(cls, raw_text: str) -> Tuple[Dict[int, str], List[Dict[str, Any]]]:
-        """
-        Analiza el documento entero y devuelve:
-          1. Diccionario de páginas: {num_pagina: texto_completo_pagina}
-          2. Lista de nodos del grafo con sus jerarquías y referencias de páginas.
-        """
         lines = raw_text.splitlines()
 
         pages_map: Dict[int, List[str]] = {}
         current_page = 1
         pages_map[current_page] = []
 
-        # Paso 1: Mapeo completo de texto por páginas
         for line in lines:
             line_str = clean_extracted_line(line)
             page_match = re.search(r'<!--\s*PAGE\s+(\d+)\s*-->', line_str, re.IGNORECASE)
@@ -133,26 +117,16 @@ class AtomicGraphParser:
                 if current_page not in pages_map:
                     pages_map[current_page] = []
                 continue
-            
             pages_map[current_page].append(line_str)
 
         pages_text_map: Dict[int, str] = {p: "\n".join(lines_list).strip() for p, lines_list in pages_map.items()}
 
-        # Paso 2: Despiece Jerárquico en Árbol Causal
         graph_nodes = []
         is_in_toc = False
         is_in_bib = False
 
         current_chapter_title = "Capítulo General"
-        current_chapter_lines: List[str] = []
-        current_chapter_start_page = 1
-        current_chapter_end_page = 1
-
         current_section_title = "Sección Principal"
-        current_section_lines: List[str] = []
-        current_section_start_page = 1
-        current_section_end_page = 1
-
         active_page = 1
 
         for line in lines:
@@ -165,12 +139,11 @@ class AtomicGraphParser:
                 active_page = int(page_match.group(1))
                 continue
 
-            # Detectar si estamos entrando o saliendo de un Índice
+            # DETECCIÓN Y EXCLUSIÓN ESTRICTA DEL ÍNDICE / TOC
             if cls.is_toc_header(line_str):
                 is_in_toc = True
                 continue
 
-            # Si es una línea con formato claro de índice, omitir
             if is_in_toc:
                 if line_str.startswith("# ") or line_str.startswith("## "):
                     if not cls.is_toc_header(line_str):
@@ -181,28 +154,18 @@ class AtomicGraphParser:
             if cls.is_toc_line(line_str):
                 continue
 
-            # Detectar Bibliografía
             if cls.is_bibliography_header(line_str):
                 is_in_bib = True
 
-            # Detectar Cambio de Capítulo (# o CHAPTER)
             if line_str.startswith("# ") or re.match(r'^(CAPÍTULO|CHAPTER)\s+[\d\w]+', line_str, re.IGNORECASE):
                 current_chapter_title = line_str.lstrip("# ").strip()
-                current_chapter_start_page = active_page
-                current_chapter_end_page = active_page
                 current_section_title = "Sección General"
-                current_section_start_page = active_page
-                current_section_end_page = active_page
                 continue
 
-            # Detectar Cambio de Sección (## o ###)
             if line_str.startswith("## ") or line_str.startswith("### ") or re.match(r'^\d+\.\d+\s+', line_str):
                 current_section_title = line_str.lstrip("#").strip()
-                current_section_start_page = active_page
-                current_section_end_page = active_page
                 continue
 
-            # Caso especial: Bloques de Bibliografía
             if is_in_bib:
                 graph_nodes.append({
                     "type": "BIB",
@@ -214,7 +177,6 @@ class AtomicGraphParser:
                 })
                 continue
 
-            # Procesamiento de Contenido Normal (Párrafos y Tablas)
             graph_nodes.append({
                 "type": "CONTENT",
                 "chapter": current_chapter_title,
@@ -235,7 +197,7 @@ class MOMMultilingualIngestionAgent:
         self.projects_dir = data_dir / "projects"
         self.library_dir = data_dir / "library" / "bib"
         self.proposals_dir = data_dir / "ai-proposals"
-        self.root_dir = data_dir.parent
+        self.root_dir = Path(__file__).resolve().parent.parent
         self.pm = ProjectManager(projects_root=self.projects_dir)
 
         config_path = data_dir / "config.json"
@@ -251,42 +213,82 @@ class MOMMultilingualIngestionAgent:
         self.library_dir.mkdir(parents=True, exist_ok=True)
         self.proposals_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate_html_graph_viewer(self, work_project_id: str, total_proposals: int) -> Path:
-        """Genera un visor HTML interactivo con Mermaid CDN en la raíz del proyecto para visualizar el grafo."""
-        proposal_files = sorted(list(self.proposals_dir.glob(f"prop_{work_project_id}_*.json")))
+    def _purge_existing_proposals_for_work(self, work_project_id: str) -> int:
+        """Borra todas las propuestas creadas previamente para este proyecto de obra en ai-proposals/."""
+        purged_count = 0
+        if not self.proposals_dir.exists():
+            return 0
 
-        mermaid_edges = []
-        node_labels = []
+        for pf in self.proposals_dir.glob("*.json"):
+            try:
+                if f"_{work_project_id}_" in pf.name or pf.name.startswith(f"prop_{work_project_id}_"):
+                    pf.unlink()
+                    purged_count += 1
+                else:
+                    with open(pf, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if data.get("metadata", {}).get("declared_in_project") == work_project_id:
+                        pf.unlink()
+                        purged_count += 1
+            except Exception:
+                pass
 
+        if purged_count > 0:
+            print(f"🧹 [PURGA PREVIA] Se han eliminado {purged_count} propuesta(s) obsoleta(s) de '{work_project_id}'.")
+        return purged_count
+
+    def generate_html_graph_viewer(self, work_project_id: str, target_split_dir: Path) -> Path:
+        """
+        Genera el visor HTML interactivo con inspección inferior del texto RAW completo,
+        reconstrucción bottom-up y comparador Diff estilo GitHub estricto.
+        """
+        proposal_files = list(self.proposals_dir.glob("*.json"))
+
+        proposals_dict: Dict[str, Dict[str, Any]] = {}
+        chapters_master_list: List[Dict[str, str]] = []
+
+        total_analyzed = 0
         for pf in proposal_files:
             try:
                 with open(pf, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                
-                node_id = data["id"]
-                title = data["title"].replace('"', "'")
-                parents = data.get("parent_ids", [])
-                
-                # Etiqueta compacta
-                node_labels.append(f'  {node_id}["<b>{node_id}</b><br/>{title[:35]}..."]')
-                
-                for p_id in parents:
-                    mermaid_edges.append(f'  {p_id} --> {node_id}')
+
+                declared_proj = data.get("metadata", {}).get("declared_in_project", "")
+                if work_project_id and work_project_id != "ALL" and work_project_id not in declared_proj:
+                    continue
+
+                total_analyzed += 1
+                n_id = data.get("id")
+                proposals_dict[n_id] = data
+
+                if data.get("phase") == "urd" and n_id.startswith(f"URD-{work_project_id}-CAP-"):
+                    raw_title = data.get("title", n_id)
+                    clean_title = raw_title.replace("[Capítulo]", "").strip()
+                    chapters_master_list.append({
+                        "id": n_id,
+                        "title": clean_title,
+                        "raw_title": raw_title
+                    })
             except Exception:
                 continue
 
-        mermaid_content = "graph TD\n" + "\n".join(node_labels[:300]) + "\n" + "\n".join(mermaid_edges[:500])
+        chapters_master_list.sort(key=lambda x: x["id"])
+
+        all_nodes_json_raw = json.dumps(proposals_dict, ensure_ascii=False)
+        chapters_json_raw = json.dumps(chapters_master_list, ensure_ascii=False)
 
         html_content = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grafo de Propuestas MOM - {work_project_id}</title>
+    <title>Visor e Inspector de Grafo MOM - {work_project_id}</title>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.1.0/dist/diff.min.js"></script>
     <style>
+        * {{ box-sizing: border-box; }}
         body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #0d1117;
             color: #c9d1d9;
             margin: 0;
@@ -294,50 +296,471 @@ class MOMMultilingualIngestionAgent:
         }}
         .header {{
             background-color: #161b22;
-            padding: 15px 25px;
+            padding: 12px 20px;
             border-radius: 8px;
             border: 1px solid #30363d;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }}
-        h1 {{ color: #58a6ff; margin: 0 0 10px 0; font-size: 24px; }}
-        .stats {{ color: #8b949e; font-size: 14px; }}
-        .mermaid-container {{
+        h1 {{ color: #58a6ff; margin: 0; font-size: 20px; }}
+        .stats {{ color: #8b949e; font-size: 13px; }}
+
+        .controls-wrapper {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
             background-color: #161b22;
-            padding: 20px;
+            padding: 10px 15px;
             border-radius: 8px;
             border: 1px solid #30363d;
+            margin-bottom: 15px;
+        }}
+        .btn {{
+            background-color: #21262d;
+            color: #58a6ff;
+            border: 1px solid #30363d;
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 0.2s;
+        }}
+        .btn:hover:not(:disabled) {{
+            background-color: #30363d;
+            border-color: #8b949e;
+        }}
+        .btn:disabled {{
+            color: #484f58;
+            cursor: not-allowed;
+            border-color: #21262d;
+        }}
+        select.custom-select {{
+            background-color: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            max-width: 450px;
+            text-overflow: ellipsis;
+        }}
+
+        .main-layout {{
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }}
+        .sidebar {{
+            width: 280px;
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 85vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }}
+        .sidebar h3 {{
+            color: #79c0ff;
+            font-size: 14px;
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 5px;
+        }}
+        .chapter-item {{
+            padding: 8px 10px;
+            margin-bottom: 5px;
+            background-color: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            color: #c9d1d9;
+            transition: background 0.2s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        .chapter-item:hover, .chapter-item.active {{
+            background-color: #1f6feb;
+            color: #ffffff;
+            border-color: #58a6ff;
+        }}
+
+        .content-area {{
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            width: calc(100% - 295px);
+        }}
+
+        .graph-card {{
+            background-color: #161b22;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            min-height: 380px;
             overflow-x: auto;
+        }}
+        #mermaid-target {{
+            width: 100%;
+        }}
+
+        /* PANEL INFERIOR DE INSPECCIÓN Y DIFF ESTILO GITHUB */
+        .inspection-panel {{
+            background-color: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 15px;
+            width: 100%;
+        }}
+        .panel-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+        }}
+        .panel-title {{
+            font-size: 15px;
+            font-weight: bold;
+            color: #58a6ff;
+        }}
+        .panel-meta {{
+            font-size: 12px;
+            color: #8b949e;
+        }}
+
+        .diff-columns {{
+            display: flex;
+            gap: 15px;
+            width: 100%;
+        }}
+        .diff-col {{
+            flex: 1;
+            width: 50%;
+            background-color: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+        }}
+        .diff-col-title {{
+            font-size: 13px;
+            font-weight: 600;
+            color: #79c0ff;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #21262d;
+        }}
+        .text-box {{
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: #c9d1d9;
+            max-height: 300px;
+            overflow-y: auto;
+        }}
+
+        /* ESTILOS DIFF GITHUB ESTRICTO */
+        .diff-added {{
+            background-color: rgba(46, 160, 67, 0.25);
+            color: #3fb950;
+            text-decoration: none;
+        }}
+        .diff-removed {{
+            background-color: rgba(248, 81, 73, 0.25);
+            color: #f85149;
+            text-decoration: line-through;
+        }}
+        .diff-match {{
+            color: #8b949e;
         }}
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>📊 Grafo Causal Atómico de Propuestas: {work_project_id}</h1>
+        <h1>📊 Visor Inspector del Grafo: {work_project_id}</h1>
         <div class="stats">
-            • Total propuestas atómicas generadas: <strong>{total_proposals}</strong><br/>
-            • Visualizando vista jerárquica DAG (Páginas COR ➔ Capítulos URD ➔ Secciones SRD ➔ Párrafos ADD ➔ Axiomas DDD)
+            Nodos Atómicos: <strong>{total_analyzed}</strong> | Capítulos: <strong>{len(chapters_master_list)}</strong>
         </div>
     </div>
-    <div class="mermaid-container">
-        <pre class="mermaid">
-{mermaid_content}
-        </pre>
+
+    <div class="controls-wrapper">
+        <button id="btn-prev" class="btn" onclick="navigateChapter(-1)">◀ Cap. Anterior</button>
+        <select id="master-select" class="custom-select" onchange="onChapterSelectChange(this.value)"></select>
+        <button id="btn-next" class="btn" onclick="navigateChapter(1)">Cap. Siguiente ▶</button>
     </div>
+
+    <div class="main-layout">
+        <div class="sidebar">
+            <h3>📚 Capítulos (Nodos Maestro)</h3>
+            <div id="chapters-list"></div>
+        </div>
+
+        <div class="content-area">
+            <!-- VISOR GRAFO MERMAID -->
+            <div class="graph-card">
+                <div id="mermaid-target"></div>
+            </div>
+
+            <!-- PANEL INFERIOR COMPLEMENTARIO DE RECONSTRUCCIÓN Y DIFF -->
+            <div class="inspection-panel">
+                <div class="panel-header">
+                    <div id="panel-node-title" class="panel-title">Seleccione un nodo en el diagrama</div>
+                    <div id="panel-node-meta" class="panel-meta">Fase: - | ID: -</div>
+                </div>
+
+                <div class="diff-columns">
+                    <!-- MITAD IZQUIERDA: TEXTO RAW COMPLETO ALMACENADO EN EL NODO -->
+                    <div class="diff-col">
+                        <div class="diff-col-title">📄 Texto RAW Íntegro Almacenado en el Nodo (Padre)</div>
+                        <div id="stored-text-box" class="text-box">Seleccione un nodo para inspeccionar su contenido.</div>
+                    </div>
+
+                    <!-- MITAD DERECHA: RECONSTRUCCIÓN BOTTOM-UP + DIFF GITHUB -->
+                    <div class="diff-col">
+                        <div class="diff-col-title">🔍 Reconstrucción Bottom-Up (Concatenación Hijos) + Diff</div>
+                        <div id="reconstructed-diff-box" class="text-box">Esperando selección de nodo...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        mermaid.initialize({{ startOnLoad: true, theme: 'dark', flowChart: {{ curve: 'basis' }} }});
+        const allNodes = {all_nodes_json_raw};
+        const masterChapters = {chapters_json_raw};
+        let currentChapterIdx = 0;
+        let currentParentId = "";
+
+        mermaid.initialize({{
+            startOnLoad: false,
+            theme: 'dark',
+            flowChart: {{ curve: 'basis' }}
+        }});
+
+        function initViewer() {{
+            const select = document.getElementById('master-select');
+            const listContainer = document.getElementById('chapters-list');
+            
+            select.innerHTML = '';
+            listContainer.innerHTML = '';
+
+            if (masterChapters.length === 0) {{
+                document.getElementById('mermaid-target').innerHTML = '<div style="color:#8b949e; text-align:center;">ℹ️ No hay Capítulos registrados.</div>';
+                return;
+            }}
+
+            masterChapters.forEach((ch, idx) => {{
+                const chapNum = (idx + 1).toString().padStart(2, '0');
+                const labelText = "Capítulo " + chapNum + ": " + ch.title.substring(0, 35);
+
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.innerText = labelText;
+                select.appendChild(opt);
+
+                const item = document.createElement('div');
+                item.className = 'chapter-item' + (idx === 0 ? ' active' : '');
+                item.id = 'chap-item-' + idx;
+                item.title = ch.raw_title;
+                item.innerText = labelText;
+                item.onclick = () => selectChapterIndex(idx);
+                listContainer.appendChild(item);
+            }});
+
+            selectChapterIndex(0);
+        }}
+
+        function selectChapterIndex(idx) {{
+            currentChapterIdx = idx;
+            document.getElementById('master-select').value = idx;
+            
+            document.querySelectorAll('.chapter-item').forEach((el, i) => {{
+                el.classList.toggle('active', i === idx);
+            }});
+
+            const chap = masterChapters[idx];
+            if (chap) {{
+                focusOnNode(chap.id);
+            }}
+        }}
+
+        function onChapterSelectChange(valStr) {{
+            selectChapterIndex(parseInt(valStr, 10));
+        }}
+
+        function navigateChapter(delta) {{
+            const newIdx = currentChapterIdx + delta;
+            if (newIdx >= 0 && newIdx < masterChapters.length) {{
+                selectChapterIndex(newIdx);
+            }}
+        }}
+
+        function getNodeRawContent(node) {{
+            if (!node) return "";
+            return node.raw_content || node.metadata?.multilingual_triplet?.text_original || node.description || "";
+        }}
+
+        /* RECONSTRUCCIÓN BOTTOM-UP Y INSPECCIÓN EN EL PANEL INFERIOR */
+        function inspectNodeDetails(nodeId) {{
+            const parentNode = allNodes[nodeId];
+            if (!parentNode) return;
+
+            document.getElementById('panel-node-title').innerText = (parentNode.title || nodeId);
+            document.getElementById('panel-node-meta').innerText = "ID: " + nodeId + " | Fase: " + (parentNode.phase || 'N/A').toUpperCase();
+
+            // Texto RAW literal almacenado directo en el padre
+            const storedRaw = getNodeRawContent(parentNode);
+            document.getElementById('stored-text-box').innerText = storedRaw || "(Nodo sin contenido raw registrado)";
+
+            // Búsqueda y ordenación estricta de Hijos Directos
+            const children = [];
+            for (const [nid, ndata] of Object.entries(allNodes)) {{
+                const parents = ndata.parent_ids || [];
+                if (parents.includes(nodeId)) {{
+                    children.push(ndata);
+                }}
+            }}
+
+            // Ordenar hijos por el atributo sequence_index
+            children.sort((a, b) => {{
+                const seqA = a.attributes?.sequence_index ?? 9999;
+                const seqB = b.attributes?.sequence_index ?? 9999;
+                return seqA - seqB;
+            }});
+
+            const diffBox = document.getElementById('reconstructed-diff-box');
+
+            if (children.length === 0) {{
+                diffBox.innerHTML = '<i style="color:#8b949e;">(Nodo atómico hoja - No tiene nodos hijos para reconstruir)</i>';
+                return;
+            }}
+
+            // Reconstruir texto concatenando el raw_content de los hijos
+            let reconstructedText = "";
+            children.forEach((c, index) => {{
+                const sep = c.attributes?.separator_before ?? (index === 0 ? "" : "\\n\\n");
+                const cRaw = getNodeRawContent(c);
+                if (index === 0) {{
+                    reconstructedText += cRaw;
+                }} else {{
+                    reconstructedText += sep + cRaw;
+                }}
+            }});
+
+            // CALCULAR Y RENDERIZAR DIFF ESTILO GITHUB (ESTRICTO)
+            const diffs = Diff.diffChars(storedRaw, reconstructedText);
+            let diffHtml = "";
+
+            diffs.forEach(part => {{
+                const colorClass = part.added ? 'diff-added' : (part.removed ? 'diff-removed' : 'diff-match');
+                const escapedText = part.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                diffHtml += '<span class="' + colorClass + '">' + escapedText + '</span>';
+            }});
+
+            diffBox.innerHTML = diffHtml;
+        }}
+
+        async function focusOnNode(parentId) {{
+            currentParentId = parentId;
+            inspectNodeDetails(parentId);
+
+            const target = document.getElementById('mermaid-target');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+
+            btnPrev.disabled = (currentChapterIdx === 0);
+            btnNext.disabled = (currentChapterIdx === masterChapters.length - 1);
+
+            // Filtrar Hijos Directos de Nivel 1
+            const directChildren = [];
+            for (const [nid, ndata] of Object.entries(allNodes)) {{
+                const parents = ndata.parent_ids || [];
+                if (parents.includes(parentId)) {{
+                    directChildren.push(nid);
+                }}
+            }}
+
+            const parentNode = allNodes[parentId];
+            const parentTitle = parentNode ? (parentNode.title || parentId).replace('"', "'").replace("\\n", " ").trim() : parentId;
+
+            const nodeLabels = [];
+            const edges = [];
+
+            nodeLabels.push('  ' + parentId + '["<b>ROOT: ' + parentId + '</b><br/><i>' + parentTitle.substring(0, 35) + '...</i>"]');
+
+            if (directChildren.length === 0) {{
+                nodeLabels.push('  EMPTY_CHILD["<i>(Sin nodos hijos directos)</i>"]');
+                edges.push('  ' + parentId + ' --> EMPTY_CHILD');
+            }} else {{
+                directChildren.forEach(childId => {{
+                    const cNode = allNodes[childId];
+                    const cTitle = cNode ? (cNode.title || childId).replace('"', "'").replace("\\n", " ").trim() : childId;
+                    nodeLabels.push('  ' + childId + '["<b>' + childId + '</b><br/>' + cTitle.substring(0, 30) + '..."]');
+                    edges.push('  ' + parentId + ' --> ' + childId);
+                }});
+            }}
+
+            const mermaidCode = "graph LR\\n" + nodeLabels.join("\\n") + "\\n" + edges.join("\\n");
+
+            try {{
+                const {{ svg }} = await mermaid.render('mermaid-svg-' + Date.now(), mermaidCode);
+                target.innerHTML = svg;
+
+                setTimeout(() => {{
+                    const svgContainer = target.querySelector('svg');
+                    if (svgContainer) {{
+                        const nodes = svgContainer.querySelectorAll('.node');
+                        nodes.forEach(n => {{
+                            n.style.cursor = 'pointer';
+                            n.onclick = (e) => {{
+                                e.stopPropagation();
+                                const fullId = n.id || '';
+                                for (const nid of Object.keys(allNodes)) {{
+                                    if (fullId.includes(nid) || n.textContent.includes(nid)) {{
+                                        focusOnNode(nid);
+                                        break;
+                                    }}
+                                }}
+                            }};
+                        }});
+                    }}
+                }}, 100);
+
+            }} catch (err) {{
+                target.innerHTML = '<div style="color:#f85149; text-align:center;">❌ Error al renderizar vista del grafo.</div>';
+                console.error(err);
+            }}
+        }}
+
+        window.addEventListener('DOMContentLoaded', initViewer);
     </script>
 </body>
 </html>
 """
-        html_file = self.root_dir / "graph_proposal_viewer.html"
-        with open(html_file, "w", encoding="utf-8") as f:
+        dest_html = target_split_dir / "graph_proposal_viewer.html"
+        with open(dest_html, "w", encoding="utf-8") as f:
             f.write(html_content)
 
-        print(f"🌐 [VISOR GRAFO HTML] Generado con éxito en la raíz: {html_file.name}")
-        return html_file
+        print(f"🌐 [VISOR HTML CON DIFF Y RECONSTRUCCIÓN BOTTOM-UP GENERADO]:")
+        print(f"  • Guardado en: {dest_html.resolve()}")
+
+        return dest_html
 
     def ingest_registered_work(self, work_dir: Path, source_lang: str = "en") -> Dict[str, Any]:
-        """Ejecuta la ingesta ULTRA leyendo la carpeta de una obra ya registrada."""
         meta_file = work_dir / "metadata.json"
         if not meta_file.exists():
             raise FileNotFoundError(f"❌ No se encontró metadata.json en {work_dir}")
@@ -394,12 +817,18 @@ class MOMMultilingualIngestionAgent:
         raw_bib_dir.mkdir(parents=True, exist_ok=True)
         split_bib_dir.mkdir(parents=True, exist_ok=True)
 
-        dest_orig = raw_bib_dir / f"original_{original_file.name}"
+        self._purge_existing_proposals_for_work(work_project_id)
+
+        orig_name = original_file.name
+        clean_name = re.sub(r'^(original_)+', '', orig_name, flags=re.IGNORECASE)
+        target_raw_filename = f"original_{clean_name}"
+        dest_orig = raw_bib_dir / target_raw_filename
+
         if original_file.resolve() != dest_orig.resolve():
             shutil.copy(original_file, dest_orig)
+
         sha256_orig = calculate_sha256(dest_orig)
 
-        # Extracción vía Motor ULTRA
         if dest_orig.suffix.lower() == ".pdf":
             extracted_md_path = extract_pdf_ultra(str(dest_orig), str(split_bib_dir))
             with open(extracted_md_path, "r", encoding="utf-8") as f:
@@ -417,103 +846,69 @@ class MOMMultilingualIngestionAgent:
         ensure_project_exists(self.pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
         ensure_project_exists(self.pm, author_clean, author_clean, [work_project_id, "MOSBIB"], False, f"Autor consolidador {author_clean}")
 
-        # Parseo Atómico
         pages_text_map, raw_nodes = AtomicGraphParser.parse_document_to_graph(orig_text)
 
         generated_proposals = 0
         proposal_counter = 1
 
-        # 1. EMITIR NODOS COR PARA LAS PÁGINAS INDIVIDUALES
-        page_node_ids: Dict[int, str] = {}
-        for page_num, p_text in pages_text_map.items():
-            pag_item_id = f"COR-{work_project_id}-PAG-{page_num:03d}"
-            page_node_ids[page_num] = pag_item_id
+        # 1. ACUMULACIÓN PREVIA DE TEXTO BRUTO ("RAW") REAL PARA CAPÍTULOS Y SECCIONES
+        chapters_raw_map: Dict[str, List[str]] = {}
+        sections_raw_map: Dict[str, List[str]] = {}
 
-            pag_proposal_data = {
-                "id": pag_item_id,
-                "phase": "cor",
-                "title": f"[Página {page_num}] Texto Íntegro de la Página {page_num}",
-                "description": p_text if p_text else f"[Página {page_num} sin texto extraíble]",
-                "parent_ids": [],
-                "attributes": {
-                    "priority": "HIGH",
-                    "status": "PROPOSED",
-                    "verification_method": "ANALYSIS",
-                    "is_user_doc": True,
-                    "decay_rate": 0.05,
-                    "supports_item_ids": [],
-                    "refutes_item_ids": []
-                },
-                "metadata": {
-                    "author": "MOMMultilingualAgent",
-                    "created_at": datetime.datetime.now().isoformat(),
-                    "version": CURRENT_SCHEMA_VERSION,
-                    "declared_in_project": work_project_id,
-                    "ai_guardrails": f"Obra: {title} | Página {page_num}",
-                    "multilingual_triplet": {
-                        "source_language": source_lang,
-                        "text_original": p_text,
-                        "text_es_raw": None,
-                        "text_es_curated": None,
-                        "translation_status": "ORIGINAL_ONLY"
-                    }
-                }
-            }
+        for node in raw_nodes:
+            if node["type"] == "BIB":
+                continue
+            c_title = node["chapter"]
+            s_title = node["section"]
+            sec_key = f"{c_title}::{s_title}"
+            content = node["content"]
 
-            filename = f"prop_{work_project_id}_{proposal_counter:04d}_PAG.json"
-            with open(self.proposals_dir / filename, "w", encoding="utf-8") as f:
-                json.dump(pag_proposal_data, f, indent=2, ensure_ascii=False)
-            generated_proposals += 1
-            proposal_counter += 1
+            if c_title not in chapters_raw_map:
+                chapters_raw_map[c_title] = []
+            chapters_raw_map[c_title].append(content)
 
-        # 2. EMITIR NODOS JERÁRQUICOS Y BIBLIOGRAFÍA
+            if sec_key not in sections_raw_map:
+                sections_raw_map[sec_key] = []
+            sections_raw_map[sec_key].append(content)
+
+        # 2. EMISIÓN DE PROPROPUESTAS CON CAMPO `raw_content` LITERAL
         chapter_cache: Dict[str, str] = {}
         section_cache: Dict[str, str] = {}
+        chapter_children_count: Dict[str, int] = {}
+        section_children_count: Dict[str, int] = {}
+        paragraph_axiom_count: Dict[str, int] = {}
+
         paragraph_counter = 1
         axiom_counter = 1
         bib_counter = 1
 
         for node in raw_nodes:
-            p_start = node["start_page"]
-            p_end = node["end_page"]
-            
-            p_start_id = page_node_ids.get(p_start, f"COR-{work_project_id}-PAG-{p_start:03d}")
-            p_end_id = page_node_ids.get(p_end, f"COR-{work_project_id}-PAG-{p_end:03d}")
-            
-            page_parents = list(set([p_start_id, p_end_id]))
-
-            # CASO A: ELEMENTOS DE BIBLIOGRAFÍA (COR-BIB-*)
             if node["type"] == "BIB":
                 bib_id = f"COR-{work_project_id}-BIB-{bib_counter:03d}"
                 bib_counter += 1
 
+                raw_text = node["content"]
                 proposal_data = {
                     "id": bib_id,
                     "phase": "cor",
-                    "title": f"[Bibliografía] Cita/Fuente #{bib_counter-1}",
-                    "description": node["content"],
-                    "parent_ids": page_parents,
+                    "title": f"Cita/Fuente #{bib_counter-1}",
+                    "description": f"Referencia bibliográfica #{bib_counter-1}",
+                    "raw_content": raw_text,
+                    "parent_ids": [raw_project_id],
                     "attributes": {
                         "priority": "HIGH",
                         "status": "PROPOSED",
-                        "verification_method": "ANALYSIS",
-                        "is_user_doc": True,
-                        "decay_rate": 0.05,
-                        "supports_item_ids": [],
-                        "refutes_item_ids": []
+                        "sequence_index": bib_counter - 1,
+                        "separator_before": "\n"
                     },
                     "metadata": {
                         "author": "MOMMultilingualAgent",
                         "created_at": datetime.datetime.now().isoformat(),
                         "version": CURRENT_SCHEMA_VERSION,
                         "declared_in_project": work_project_id,
-                        "ai_guardrails": f"Obra: {title} | Referencia Bibliográfica",
                         "multilingual_triplet": {
                             "source_language": source_lang,
-                            "text_original": node["content"],
-                            "text_es_raw": None,
-                            "text_es_curated": None,
-                            "translation_status": "ORIGINAL_ONLY"
+                            "text_original": raw_text
                         }
                     }
                 }
@@ -525,39 +920,36 @@ class MOMMultilingualIngestionAgent:
                 proposal_counter += 1
                 continue
 
-            # CASO B: CONTENIDO REGULAR DE LA OBRA (URD -> SRD -> ADD -> DDD)
             c_title = node["chapter"]
             if c_title not in chapter_cache:
                 cap_id = f"URD-{work_project_id}-CAP-{len(chapter_cache)+1:03d}"
                 chapter_cache[c_title] = cap_id
+                chapter_children_count[cap_id] = 0
+
+                # Contenido RAW completo del Capítulo
+                cap_raw_content = "\n\n".join(chapters_raw_map.get(c_title, [c_title]))
 
                 cap_data = {
                     "id": cap_id,
                     "phase": "urd",
-                    "title": f"[Capítulo] {c_title}",
-                    "description": f"Capítulo completo: {c_title}",
-                    "parent_ids": page_parents,
+                    "title": c_title,
+                    "description": f"Nodo contenedor del capítulo: {c_title}",
+                    "raw_content": cap_raw_content,
+                    "parent_ids": [work_project_id],
                     "attributes": {
                         "priority": "HIGH",
                         "status": "PROPOSED",
-                        "verification_method": "ANALYSIS",
-                        "is_user_doc": True,
-                        "decay_rate": 0.05,
-                        "supports_item_ids": [],
-                        "refutes_item_ids": []
+                        "sequence_index": len(chapter_cache),
+                        "separator_before": "\n\n"
                     },
                     "metadata": {
                         "author": "MOMMultilingualAgent",
                         "created_at": datetime.datetime.now().isoformat(),
                         "version": CURRENT_SCHEMA_VERSION,
                         "declared_in_project": work_project_id,
-                        "ai_guardrails": f"Obra: {title} | Capítulo",
                         "multilingual_triplet": {
                             "source_language": source_lang,
-                            "text_original": c_title,
-                            "text_es_raw": None,
-                            "text_es_curated": None,
-                            "translation_status": "ORIGINAL_ONLY"
+                            "text_original": cap_raw_content
                         }
                     }
                 }
@@ -573,34 +965,35 @@ class MOMMultilingualIngestionAgent:
             if sec_key not in section_cache:
                 sec_id = f"SRD-{work_project_id}-SEC-{len(section_cache)+1:03d}"
                 section_cache[sec_key] = sec_id
+                section_children_count[sec_id] = 0
+
+                chapter_children_count[current_cap_id] += 1
+                sec_seq = chapter_children_count[current_cap_id]
+
+                # Contenido RAW completo de la Sección
+                sec_raw_content = "\n\n".join(sections_raw_map.get(sec_key, [s_title]))
 
                 sec_data = {
                     "id": sec_id,
                     "phase": "srd",
-                    "title": f"[Sección] {s_title}",
-                    "description": f"Sección completa: {s_title}",
-                    "parent_ids": list(set([current_cap_id] + page_parents)),
+                    "title": s_title,
+                    "description": f"Nodo contenedor de la sección: {s_title}",
+                    "raw_content": sec_raw_content,
+                    "parent_ids": [current_cap_id],
                     "attributes": {
                         "priority": "HIGH",
                         "status": "PROPOSED",
-                        "verification_method": "ANALYSIS",
-                        "is_user_doc": True,
-                        "decay_rate": 0.05,
-                        "supports_item_ids": [],
-                        "refutes_item_ids": []
+                        "sequence_index": sec_seq,
+                        "separator_before": "\n\n"
                     },
                     "metadata": {
                         "author": "MOMMultilingualAgent",
                         "created_at": datetime.datetime.now().isoformat(),
                         "version": CURRENT_SCHEMA_VERSION,
                         "declared_in_project": work_project_id,
-                        "ai_guardrails": f"Obra: {title} | Sección",
                         "multilingual_triplet": {
                             "source_language": source_lang,
-                            "text_original": s_title,
-                            "text_es_raw": None,
-                            "text_es_curated": None,
-                            "translation_status": "ORIGINAL_ONLY"
+                            "text_original": sec_raw_content
                         }
                     }
                 }
@@ -611,37 +1004,34 @@ class MOMMultilingualIngestionAgent:
 
             current_sec_id = section_cache[sec_key]
 
-            # PÁRRAFO (ADD)
             par_id = f"ADD-{work_project_id}-PAR-{paragraph_counter:03d}"
             paragraph_counter += 1
 
+            section_children_count[current_sec_id] += 1
+            par_seq = section_children_count[current_sec_id]
+
+            par_raw_content = node["content"]
             par_data = {
                 "id": par_id,
                 "phase": "add",
-                "title": f"[Párrafo #{paragraph_counter-1}] {node['content'][:40]}...",
-                "description": node["content"],
-                "parent_ids": list(set([current_sec_id] + page_parents)),
+                "title": f"Párrafo #{paragraph_counter-1}",
+                "description": f"Bloque de párrafo {paragraph_counter-1}",
+                "raw_content": par_raw_content,
+                "parent_ids": [current_sec_id],
                 "attributes": {
                     "priority": "HIGH",
                     "status": "PROPOSED",
-                    "verification_method": "ANALYSIS",
-                    "is_user_doc": True,
-                    "decay_rate": 0.05,
-                    "supports_item_ids": [],
-                    "refutes_item_ids": []
+                    "sequence_index": par_seq,
+                    "separator_before": "\n\n"
                 },
                 "metadata": {
                     "author": "MOMMultilingualAgent",
                     "created_at": datetime.datetime.now().isoformat(),
                     "version": CURRENT_SCHEMA_VERSION,
                     "declared_in_project": work_project_id,
-                    "ai_guardrails": f"Obra: {title} | Párrafo",
                     "multilingual_triplet": {
                         "source_language": source_lang,
-                        "text_original": node["content"],
-                        "text_es_raw": None,
-                        "text_es_curated": None,
-                        "translation_status": "ORIGINAL_ONLY"
+                        "text_original": par_raw_content
                     }
                 }
             }
@@ -650,42 +1040,39 @@ class MOMMultilingualIngestionAgent:
             generated_proposals += 1
             proposal_counter += 1
 
-            # AXIOMAS / FRASES (DDD)
             sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+(?=[A-Z1-9\*\-\"\(])', node["content"]) if len(s.strip()) > 5]
             if not sentences:
                 sentences = [node["content"]]
 
+            paragraph_axiom_count[par_id] = 0
             for s_text in sentences:
                 axi_id = f"DDD-{work_project_id}-AXI-{axiom_counter:03d}"
                 axiom_counter += 1
 
+                paragraph_axiom_count[par_id] += 1
+                axi_seq = paragraph_axiom_count[par_id]
+
                 axi_data = {
                     "id": axi_id,
                     "phase": "ddd",
-                    "title": f"[Axioma Atómico] {s_text[:40]}...",
-                    "description": s_text,
-                    "parent_ids": list(set([par_id] + page_parents)),
+                    "title": f"Axioma Atómico #{axiom_counter-1}",
+                    "description": f"Frase atómica #{axiom_counter-1}",
+                    "raw_content": s_text,
+                    "parent_ids": [par_id],
                     "attributes": {
                         "priority": "HIGH",
                         "status": "PROPOSED",
-                        "verification_method": "ANALYSIS",
-                        "is_user_doc": True,
-                        "decay_rate": 0.05,
-                        "supports_item_ids": [],
-                        "refutes_item_ids": []
+                        "sequence_index": axi_seq,
+                        "separator_before": " "
                     },
                     "metadata": {
                         "author": "MOMMultilingualAgent",
                         "created_at": datetime.datetime.now().isoformat(),
                         "version": CURRENT_SCHEMA_VERSION,
                         "declared_in_project": work_project_id,
-                        "ai_guardrails": f"Obra: {title} | Axioma Atómico",
                         "multilingual_triplet": {
                             "source_language": source_lang,
-                            "text_original": s_text,
-                            "text_es_raw": None,
-                            "text_es_curated": None,
-                            "translation_status": "ORIGINAL_ONLY"
+                            "text_original": s_text
                         }
                     }
                 }
@@ -694,22 +1081,15 @@ class MOMMultilingualIngestionAgent:
                 generated_proposals += 1
                 proposal_counter += 1
 
-        # Generar visor HTML con Mermaid CDN
-        self.generate_html_graph_viewer(work_project_id, generated_proposals)
+        self.generate_html_graph_viewer(work_project_id, target_split_dir=split_bib_dir)
 
         print("\n=======================================================")
         print(" 🤖 RESULTADO DE CAPTURA ATÓMICA Y GRAFO ESA")
         print("=======================================================")
         print(f"  • Proyecto Obra Despiece:    {work_project_id}")
         print(f"  • SHA-256 Fuente Original:   {sha256_orig}")
-        print(f"  • Páginas Creadas (COR):     {len(pages_text_map)}")
-        print(f"  • Capítulos Creados (URD):   {len(chapter_cache)}")
-        print(f"  • Secciones Creadas (SRD):   {len(section_cache)}")
-        print(f"  • Párrafos Creados (ADD):    {paragraph_counter-1}")
-        print(f"  • Axiomas Creados (DDD):     {axiom_counter-1}")
-        print(f"  • Citas Bibliográficas (BIB): {bib_counter-1}")
-        print(f"  • Propuestas Generadas:      {generated_proposals} en 'data/ai-proposals/'")
-        print(f"  • Visor HTML Creado:         graph_proposal_viewer.html")
+        print(f"  • Propuestas Creadas:        {generated_proposals} en 'data/ai-proposals/'")
+        print(f"  • Visor HTML Creado:         {split_bib_dir / 'graph_proposal_viewer.html'}")
         print("=======================================================")
 
         return {
@@ -723,15 +1103,15 @@ class MOMMultilingualIngestionAgent:
 
 def main():
     parser = argparse.ArgumentParser(description="MOM Agent: Ingestor ULTRA y Generador del Grafo Causal ESA")
-    parser.add_argument("--original", required=True, help="Ruta al archivo original (ej. PDF/MD en inglés)")
-    parser.add_argument("--author", required=True, help="ID de Autor Principal (ej. ESA)")
-    parser.add_argument("--work", required=True, help="ID corto de la obra (ej. PSS05)")
-    parser.add_argument("--title", required=True, help="Título completo de la obra")
-    parser.add_argument("--publisher", default="ESA", help="Entidad emisora/editorial")
-    parser.add_argument("--year", type=int, default=1991, help="Año de publicación")
-    parser.add_argument("--license", default="Public Domain", help="Tipo de Licencia")
-    parser.add_argument("--public", action="store_true", help="Permitir exportación pública completa")
-    parser.add_argument("--lang", default="en", help="Código de idioma de origen (ej. en, es)")
+    parser.add_argument("--original", required=True, help="Ruta al archivo original")
+    parser.add_argument("--author", required=True, help="ID de Autor Principal")
+    parser.add_argument("--work", required=True, help="ID corto de la obra")
+    parser.add_argument("--title", required=True, help="Título completo")
+    parser.add_argument("--publisher", default="ESA", help="Editorial")
+    parser.add_argument("--year", type=int, default=1991, help="Año")
+    parser.add_argument("--license", default="Public Domain", help="Licencia")
+    parser.add_argument("--public", action="store_true", help="Exportación pública")
+    parser.add_argument("--lang", default="en", help="Idioma origen")
 
     args = parser.parse_args()
     data_dir = current_dir.parent / "data"
@@ -753,6 +1133,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# App Version: 0.7.0
-# Script Version: 0.7.0.0
+# App Version: 0.8.1
+# Script Version: 0.8.1.0
 # Compatible Schema: 0.5.3
