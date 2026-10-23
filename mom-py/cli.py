@@ -362,295 +362,391 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
 
     _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [], False, "Pilar herencial de obras y fuentes bibliográficas")
 
-    print("\n=======================================================")
-    print(" 📚 GESTIÓN DE BIBLIOTECA Y PROYECTOS OBRA (AUTHOR-*)")
-    print("=======================================================")
-    print("  [1] Inicializar Nodo Autor Consolidador (ej. AUTHOR-W3C)")
-    print("  [2] Registrar OBRA FORMAL Y MATRIZ RAW (ej. AUTHOR-W3C-WCAG22)")
-    print("  [3] Ejecutar TROCEO AGÉNTICO Estándar (Zero-Deps)")
-    print("  [3b] Ejecutar INGESTA AVANZADA PDF (PyMuPDF + OCR)")
-    print("  [3c] Ejecutar TROCEO DIRECTO desde MARKDOWN (Omite PDF)")
-    print("  [4] Ejecutar Kill-Switch / Revocación de Cita Literal")
-    print("  [0] Volver al Menú Principal")
-    print("-------------------------------------------------------")
+    while True:
+        print("\n=======================================================")
+        print(" 📚 GESTIÓN DE BIBLIOTECA Y PROYECTOS OBRA (MOSBIB)")
+        print("=======================================================")
+        print("  [1] Registrar nuevo nodo Autor Consolidador (ej. AUTHOR-W3C)")
+        print("  [2] Registrar nueva Obra / Matriz RAW (ej. AUTHOR-W3C-WCAG22)")
+        print("  [3] Extraer y despiezar obra (Extracción Nativa Estándar)")
+        print("  [4] Extraer y despiezar obra (Extracción Avanzada PyMuPDF/OCR)")
+        print("  [5] Extraer y despiezar obra (Extracción ULTRA - Modo IA)")
+        print("  [6] Trocear obra desde Markdown existente (Split Directo)")
+        print("  [7] Ejecutar Kill-Switch / Revocación de Cita Literal")
+        print("  [8] Eliminar obra bibliográfica registrada")
+        print("  [0] Volver al Menú Principal")
+        print("-------------------------------------------------------")
 
-    opt = input("Selecciona una opción [0-4, 3b, 3c]: ").strip().lower()
+        opt = input("Selecciona una opción [0-8]: ").strip()
 
-    if opt == "1":
-        author_id = input("ID del Autor Consolidador (ej. AUTHOR-W3C): ").strip().upper()
-        if not author_id.startswith("AUTHOR-"):
-            author_id = f"AUTHOR-{author_id}"
-        
-        name = input(f"Nombre completo del Autor [{author_id}]: ").strip() or author_id
-        desc = input("Descripción doctrinal del corpus del autor: ").strip()
+        if opt == "1":
+            author_id = input("ID del Autor Consolidador (ej. AUTHOR-W3C): ").strip().upper()
+            if not author_id.startswith("AUTHOR-"):
+                author_id = f"AUTHOR-{author_id}"
+            
+            name = input(f"Nombre completo del Autor [{author_id}]: ").strip() or author_id
+            desc = input("Descripción doctrinal del corpus del autor: ").strip()
 
-        _ensure_project_exists(pm, author_id, name, ["MOSAUTHOR"], False, desc)
-        (bib_dir / author_id).mkdir(parents=True, exist_ok=True)
-        print(f"✅ Nodo Autor Consolidador '{author_id}' (Hijo de MOSAUTHOR) inicializado con éxito.")
+            _ensure_project_exists(pm, author_id, name, ["MOSAUTHOR"], False, desc)
+            (bib_dir / author_id).mkdir(parents=True, exist_ok=True)
+            print(f"✅ Nodo Autor Consolidador '{author_id}' (Hijo de MOSAUTHOR) inicializado con éxito.")
 
-    elif opt == "2":
-        author_dirs = [d.name for d in pm.projects_root.iterdir() if d.is_dir() and d.name.startswith("AUTHOR-") and len(d.name.split("-")) == 2]
-        if not author_dirs:
-            print("❌ No hay nodos autor consolidador. Inicializa un nodo autor primero (opción 1).")
-            return
+        elif opt == "2":
+            author_dirs = [d.name for d in pm.projects_root.iterdir() if d.is_dir() and d.name.startswith("AUTHOR-") and len(d.name.split("-")) == 2]
+            if not author_dirs:
+                print("❌ No hay nodos autor consolidador. Inicializa un nodo autor primero (opción 1).")
+                continue
 
-        print("Autores/Pilares disponibles:")
-        for i, a in enumerate(author_dirs, 1):
-            print(f"  [{i}] {a}")
-        
-        try:
-            a_idx = int(input("Selecciona Autor: ")) - 1
-            parent_author_id = author_dirs[a_idx]
-        except (ValueError, IndexError):
-            print("❌ Selección no válida.")
-            return
+            print("Autores/Pilares disponibles:")
+            for i, a in enumerate(author_dirs, 1):
+                print(f"  [{i}] {a}")
+            
+            try:
+                a_idx = int(input("Selecciona Autor: ")) - 1
+                parent_author_id = author_dirs[a_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                continue
 
-        work_code = input("ID corto de la obra (ej. WCAG22): ").strip().upper()
-        work_project_id = f"{parent_author_id}-{work_code}"
-        raw_project_id = f"{work_project_id}-RAW"
+            work_code = input("ID corto de la obra (ej. WCAG22): ").strip().upper()
+            work_project_id = f"{parent_author_id}-{work_code}"
+            raw_project_id = f"{work_project_id}-RAW"
 
-        title = input("Título completo de la obra: ").strip()
-        publisher = input("Editorial / Entidad Emisora: ").strip()
-        year_raw = input("Año de publicación: ").strip()
-        year = int(year_raw) if year_raw.isdigit() else 2026
-        url = input("URL / DOI / ISBN de referencia: ").strip()
-        license_type = input("Tipo de Licencia (ej. W3C, Public Domain, CC-BY, Copyright): ").strip() or "W3C"
-        
-        is_spanish = ask_confirmation("¿El documento original está escrito directamente en español?")
-        allow_export = ask_confirmation("¿Permite exportación de texto literal completo (Dominio Público/Licencia Abierta)?")
-        raw_is_private = not allow_export
+            title = input("Título completo de la obra: ").strip()
+            publisher = input("Editorial / Entidad Emisora: ").strip()
+            year_raw = input("Año de publicación: ").strip()
+            year = int(year_raw) if year_raw.isdigit() else 2026
+            url = input("URL / DOI / ISBN de referencia: ").strip()
+            license_type = input("Tipo de Licencia (ej. W3C, Public Domain, CC-BY, Copyright): ").strip() or "W3C"
+            
+            is_spanish = ask_confirmation("¿El documento original está escrito directamente en español?")
+            allow_export = ask_confirmation("¿Permite exportación de texto literal completo (Dominio Público/Licencia Abierta)?")
+            raw_is_private = not allow_export
 
-        raw_file_str = input("Ruta al archivo original completo (opcional, Enter para omitir): ").strip()
-        sha256_str = ""
+            raw_file_str = input("Ruta al archivo original completo (opcional, Enter para omitir): ").strip()
+            sha256_str = ""
 
-        _ensure_project_exists(pm, raw_project_id, f"Fuente Matriz RAW: {title}", [], raw_is_private, f"Archivo maestro original de {title}")
-        _ensure_project_exists(pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
-        _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [work_project_id], False, "Pilar herencial de obras")
-        _ensure_project_exists(pm, parent_author_id, parent_author_id, [work_project_id, "MOSBIB"], False, "Autor consolidador")
-        _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [parent_author_id], False, "Nodo central de herencia")
+            _ensure_project_exists(pm, raw_project_id, f"Fuente Matriz RAW: {title}", [], raw_is_private, f"Archivo maestro original de {title}")
+            _ensure_project_exists(pm, work_project_id, title, [raw_project_id], False, f"Despiece atómico de {title}")
+            _ensure_project_exists(pm, "MOSBIB", "Pilar Global de Bibliografía", [work_project_id], False, "Pilar herencial de obras")
+            _ensure_project_exists(pm, parent_author_id, parent_author_id, [work_project_id, "MOSBIB"], False, "Autor consolidador")
+            _ensure_project_exists(pm, "MOSAUTHOR", "Consolidador Global de Autores", [parent_author_id], False, "Nodo central de herencia")
 
-        work_dir = bib_dir / parent_author_id / work_code
-        (work_dir / "raw").mkdir(parents=True, exist_ok=True)
-        (work_dir / "split").mkdir(parents=True, exist_ok=True)
+            work_dir = bib_dir / parent_author_id / work_code
+            (work_dir / "raw").mkdir(parents=True, exist_ok=True)
+            (work_dir / "split").mkdir(parents=True, exist_ok=True)
 
-        if raw_file_str:
-            raw_path = Path(raw_file_str).expanduser().resolve()
-            if raw_path.exists():
-                dest_file = work_dir / "raw" / raw_path.name
-                shutil.copy(raw_path, dest_file)
-                sha256_str = _calculate_sha256(dest_file)
-                print(f"✅ Archivo origen copiado a la biblioteca privada. SHA-256: {sha256_str}")
+            if raw_file_str:
+                raw_path = Path(raw_file_str).expanduser().resolve()
+                if raw_path.exists():
+                    dest_file = work_dir / "raw" / raw_path.name
+                    shutil.copy(raw_path, dest_file)
+                    sha256_str = _calculate_sha256(dest_file)
+                    print(f"✅ Archivo origen copiado a la biblioteca privada. SHA-256: {sha256_str}")
 
-        bib_meta = {
-            "project_id": work_project_id,
-            "raw_project_id": raw_project_id,
-            "author_id": parent_author_id,
-            "work_id": work_code,
-            "title": title,
-            "publisher": publisher,
-            "year": year,
-            "url": url,
-            "license_type": license_type,
-            "allow_full_text_export": allow_export,
-            "is_spanish_original": is_spanish,
-            "kill_switch_enabled": False,
-            "sha256_hash": sha256_str
-        }
+            bib_meta = {
+                "project_id": work_project_id,
+                "raw_project_id": raw_project_id,
+                "author_id": parent_author_id,
+                "work_id": work_code,
+                "title": title,
+                "publisher": publisher,
+                "year": year,
+                "url": url,
+                "license_type": license_type,
+                "allow_full_text_export": allow_export,
+                "is_spanish_original": is_spanish,
+                "kill_switch_enabled": False,
+                "sha256_hash": sha256_str
+            }
 
-        with open(work_dir / "metadata.json", "w", encoding="utf-8") as f:
-            json.dump(bib_meta, f, indent=2, ensure_ascii=False)
+            with open(work_dir / "metadata.json", "w", encoding="utf-8") as f:
+                json.dump(bib_meta, f, indent=2, ensure_ascii=False)
 
-        print(f"✅ FUENTE MATRIZ CREADA: '{raw_project_id}' (Visibilidad: {'🔒 PRIVADA' if raw_is_private else '🌐 PÚBLICA'})")
-        print(f"✅ OBRA DESPIECE CREADA: '{work_project_id}' (Hereda de '{raw_project_id}')")
-        print(f"✅ JERARQUÍA CONSOLIDADA: {work_project_id} ➔ MOSBIB & {parent_author_id} ➔ MOSAUTHOR")
+            print(f"✅ FUENTE MATRIZ CREADA: '{raw_project_id}' (Visibilidad: {'🔒 PRIVADA' if raw_is_private else '🌐 PÚBLICA'})")
+            print(f"✅ OBRA DESPIECE CREADA: '{work_project_id}' (Hereda de '{raw_project_id}')")
+            print(f"✅ JERARQUÍA CONSOLIDADA: {work_project_id} ➔ MOSBIB & {parent_author_id} ➔ MOSAUTHOR")
 
-        if raw_file_str and ask_confirmation("¿Deseas lanzar el TROCEO AGÉNTICO inmediatamente para esta obra?"):
+            if raw_file_str and ask_confirmation("¿Deseas lanzar el TROCEO AGÉNTICO inmediatamente para esta obra?"):
+                from ingest_agent import MOMMultilingualIngestionAgent
+                agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
+                res = agent.ingest_registered_work(work_dir)
+                input("\n🔻 Presiona [Enter] para continuar...")
+
+        elif opt == "3":
+            print("\n--- 🤖 EXTRACCIÓN Y TROCEO NATIVO ESTÁNDAR ---")
+            author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+            registered_works = []
+
+            for ad in author_dirs:
+                for wd in ad.iterdir():
+                    if wd.is_dir() and (wd / "metadata.json").exists():
+                        registered_works.append(wd)
+
+            if not registered_works:
+                print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            print("Obras disponibles para troceo nativo:")
+            for i, wd in enumerate(registered_works, 1):
+                with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                lang_str = " (Original ES)" if meta.get("is_spanish_original") else " (Requiere Traducción)"
+                print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}{lang_str}")
+
+            try:
+                w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+                target_work_dir = registered_works[w_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
             from ingest_agent import MOMMultilingualIngestionAgent
             agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
-            res = agent.ingest_registered_work(work_dir)
-            input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
-
-    elif opt == "3":
-        print("\n--- 🤖 SELECCIONAR OBRA REGISTRADA PARA TROCEO AGÉNTICO ESTÁNDAR ---")
-        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
-        registered_works = []
-
-        for ad in author_dirs:
-            for wd in ad.iterdir():
-                if wd.is_dir() and (wd / "metadata.json").exists():
-                    registered_works.append(wd)
-
-        if not registered_works:
-            print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+            res = agent.ingest_registered_work(target_work_dir)
             input("\n🔻 Presiona [Enter] para continuar...")
-            return
 
-        print("Obras disponibles para troceo:")
-        for i, wd in enumerate(registered_works, 1):
-            with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+        elif opt == "4":
+            print("\n--- 🚀 EXTRACCIÓN AVANZADA (PyMuPDF + OCR) ---")
+            author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+            registered_works = []
+
+            for ad in author_dirs:
+                for wd in ad.iterdir():
+                    if wd.is_dir() and (wd / "metadata.json").exists():
+                        registered_works.append(wd)
+
+            if not registered_works:
+                print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            print("Obras disponibles para extracción avanzada:")
+            for i, wd in enumerate(registered_works, 1):
+                with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+
+            try:
+                w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+                target_work_dir = registered_works[w_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            raw_dir = target_work_dir / "raw"
+            pdf_files = list(raw_dir.glob("*.pdf")) + list(raw_dir.glob("*.PDF"))
+
+            if not pdf_files:
+                print(f"❌ No se encontró ningún archivo PDF en la carpeta RAW: {raw_dir}")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            target_pdf = pdf_files[0]
+            split_dir = target_work_dir / "split"
+            split_dir.mkdir(parents=True, exist_ok=True)
+
+            print(f"📄 Procesando PDF con motor Avanzado: {target_pdf.name}")
+
+            try:
+                from pdf_extractor_advanced import extract_pdf_advanced
+                res_md = extract_pdf_advanced(str(target_pdf), str(split_dir))
+                
+                extracted_orig_md = split_dir / "original_extracted.md"
+                shutil.copy(res_md, extracted_orig_md)
+                
+                print(f"✅ Extracción avanzada completada con éxito: {extracted_orig_md}")
+            except Exception as e:
+                print(f"❌ Error al ejecutar extracción avanzada: {e}")
+                
+            input("\n🔻 Presiona [Enter] para continuar...")
+
+        elif opt == "5":
+            print("\n--- ⚡ EXTRACCIÓN ULTRA - MODO IA (PyMuPDF + OCR + Reconstrucción Semántica) ---")
+            author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+            registered_works = []
+
+            for ad in author_dirs:
+                for wd in ad.iterdir():
+                    if wd.is_dir() and (wd / "metadata.json").exists():
+                        registered_works.append(wd)
+
+            if not registered_works:
+                print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            print("Obras disponibles para Extracción ULTRA:")
+            for i, wd in enumerate(registered_works, 1):
+                with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+
+            try:
+                w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+                target_work_dir = registered_works[w_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            raw_dir = target_work_dir / "raw"
+            pdf_files = list(raw_dir.glob("*.pdf")) + list(raw_dir.glob("*.PDF"))
+
+            if not pdf_files:
+                print(f"❌ No se encontró ningún archivo PDF en la carpeta RAW: {raw_dir}")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            target_pdf = pdf_files[0]
+            split_dir = target_work_dir / "split"
+            split_dir.mkdir(parents=True, exist_ok=True)
+
+            print(f"📄 Procesando PDF con motor ULTRA: {target_pdf.name}")
+
+            try:
+                from pdf_extractor_ultra import extract_pdf_ultra
+                res_md = extract_pdf_ultra(str(target_pdf), str(split_dir))
+                
+                extracted_orig_md = split_dir / "original_extracted.md"
+                shutil.copy(res_md, extracted_orig_md)
+                
+                print(f"✅ Extracción ULTRA completada y sincronizada: {extracted_orig_md}")
+            except Exception as e:
+                print(f"❌ Error al ejecutar la extracción Ultra: {e}")
+                
+            input("\n🔻 Presiona [Enter] para continuar...")
+
+        elif opt == "6":
+            print("\n--- 📝 TROCEO DIRECTO DESDE MARKDOWN EXISTENTE ---")
+            author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+            registered_works = []
+
+            for ad in author_dirs:
+                for wd in ad.iterdir():
+                    if wd.is_dir() and (wd / "metadata.json").exists():
+                        registered_works.append(wd)
+
+            if not registered_works:
+                print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            print("Obras disponibles para troceo directo desde .md:")
+            for i, wd in enumerate(registered_works, 1):
+                with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+
+            try:
+                w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+                target_work_dir = registered_works[w_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                input("\n🔻 Presiona [Enter] para continuar...")
+                continue
+
+            from ingest_agent import MOMMultilingualIngestionAgent
+            agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
+            res = agent.ingest_registered_work_from_markdown(target_work_dir)
+            input("\n🔻 Presiona [Enter] para continuar...")
+
+        elif opt == "7":
+            print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
+            author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+            all_works = []
+
+            for ad in author_dirs:
+                for wd in ad.iterdir():
+                    if wd.is_dir() and (wd / "metadata.json").exists():
+                        all_works.append(wd)
+
+            if not all_works:
+                print("❌ No hay obras registradas en la biblioteca.")
+                continue
+
+            print("Obras registradas:")
+            for i, wd in enumerate(all_works, 1):
+                print(f"  [{i}] {wd.parent.name} / {wd.name}")
+
+            try:
+                w_idx = int(input("Selecciona obra para modificar/revocar: ")) - 1
+                target_work = all_works[w_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                continue
+
+            meta_file = target_work / "metadata.json"
+            with open(meta_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
-            lang_str = " (Original ES)" if meta.get("is_spanish_original") else " (Requiere Traducción)"
-            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}{lang_str}")
 
-        try:
-            w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
-            target_work_dir = registered_works[w_idx]
-        except (ValueError, IndexError):
-            print("❌ Selección no válida.")
-            input("\n🔻 Presiona [Enter] para continuar...")
-            return
+            print(f"\nEstado actual de '{meta.get('work_id')}':")
+            print(f"  • Permitir Texto Literal Público: {meta.get('allow_full_text_export')}")
+            print(f"  • Kill-Switch Activado:          {meta.get('kill_switch_enabled')}")
 
-        from ingest_agent import MOMMultilingualIngestionAgent
-        agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
-        res = agent.ingest_registered_work(target_work_dir)
-        input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
+            if ask_confirmation("¿Deseas ACTIVAR el Kill-Switch y REVOCAR inmediatamente la exportación pública de texto literal?"):
+                meta["allow_full_text_export"] = False
+                meta["kill_switch_enabled"] = True
+                with open(meta_file, "w", encoding="utf-8") as f:
+                    json.dump(meta, f, indent=2, ensure_ascii=False)
+                
+                raw_id = meta.get("raw_project_id")
+                if raw_id:
+                    raw_json = pm.projects_root / raw_id / "project.json"
+                    if raw_json.exists():
+                        with open(raw_json, "r", encoding="utf-8") as f:
+                            rmeta = json.load(f)
+                        rmeta["is_private"] = True
+                        with open(raw_json, "w", encoding="utf-8") as f:
+                            json.dump(rmeta, f, indent=2, ensure_ascii=False)
+                        repo_root = current_dir.parent
+                        append_to_root_gitignore(repo_root, f"data/projects/{raw_id}/")
+                        _untrack_and_purge_private_path(repo_root, f"data/projects/{raw_id}/")
 
-    elif opt == "3b":
-        print("\n--- 🚀 INGESTA AVANZADA PDF (PyMuPDF + OCR) SOBRE OBRA REGISTRADA ---")
-        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
-        registered_works = []
+                print("🛑 Kill-Switch activado. La fuente matriz se ha bloqueado como PRIVADA y se purgará la cita literal.")
+                repo_root = current_dir.parent
+                execute_sovereign_git_push(repo_root, f"fix(security): activado kill-switch soberano para obra {meta.get('work_id')}")
 
-        for ad in author_dirs:
-            for wd in ad.iterdir():
-                if wd.is_dir() and (wd / "metadata.json").exists():
-                    registered_works.append(wd)
+        elif opt == "8":
+            print("\n--- 🗑️ ELIMINAR OBRA BIBLIOGRÁFICA REGISTRADA ---")
+            author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+            all_works = []
 
-        if not registered_works:
-            print("❌ No hay obras registradas con metadata.json en la biblioteca.")
-            input("\n🔻 Presiona [Enter] para continuar...")
-            return
+            for ad in author_dirs:
+                for wd in ad.iterdir():
+                    if wd.is_dir() and (wd / "metadata.json").exists():
+                        all_works.append(wd)
 
-        print("Obras disponibles para ingesta avanzada:")
-        for i, wd in enumerate(registered_works, 1):
-            with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+            if not all_works:
+                print("❌ No hay obras registradas en la biblioteca.")
+                continue
+
+            print("Obras registradas:")
+            for i, wd in enumerate(all_works, 1):
+                print(f"  [{i}] {wd.parent.name} / {wd.name}")
+
+            try:
+                w_idx = int(input("Selecciona la obra a ELIMINAR: ")) - 1
+                target_work = all_works[w_idx]
+            except (ValueError, IndexError):
+                print("❌ Selección no válida.")
+                continue
+
+            meta_file = target_work / "metadata.json"
+            with open(meta_file, "r", encoding="utf-8") as f:
                 meta = json.load(f)
-            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
 
-        try:
-            w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
-            target_work_dir = registered_works[w_idx]
-        except (ValueError, IndexError):
-            print("❌ Selección no válida.")
-            input("\n🔻 Presiona [Enter] para continuar...")
-            return
-
-        raw_dir = target_work_dir / "raw"
-        pdf_files = list(raw_dir.glob("*.pdf")) + list(raw_dir.glob("*.PDF"))
-
-        if not pdf_files:
-            print(f"❌ No se encontró ningún archivo PDF en la carpeta RAW: {raw_dir}")
-            input("\n🔻 Presiona [Enter] para continuar...")
-            return
-
-        target_pdf = pdf_files[0]
-        split_dir = target_work_dir / "split"
-        split_dir.mkdir(parents=True, exist_ok=True)
-
-        print(f"📄 Procesando PDF encontrado en RAW: {target_pdf.name}")
-
-        try:
-            from pdf_extractor_advanced import extract_pdf_advanced
-            res_md = extract_pdf_advanced(str(target_pdf), str(split_dir))
-            
-            # Guardar como original_extracted.md para integración automática
-            extracted_orig_md = split_dir / "original_extracted.md"
-            shutil.copy(res_md, extracted_orig_md)
-            
-            print(f"✅ Ingesta avanzada completada con éxito: {extracted_orig_md}")
-        except Exception as e:
-            print(f"❌ Error al ejecutar ingesta avanzada: {e}")
-            
-        input("\n🔻 Presiona [Enter] para continuar...")
-
-    elif opt == "3c":
-        print("\n--- 📝 TROCEO DIRECTO DESDE MARKDOWN (.md) (Omite PDF) ---")
-        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
-        registered_works = []
-
-        for ad in author_dirs:
-            for wd in ad.iterdir():
-                if wd.is_dir() and (wd / "metadata.json").exists():
-                    registered_works.append(wd)
-
-        if not registered_works:
-            print("❌ No hay obras registradas con metadata.json en la biblioteca.")
-            input("\n🔻 Presiona [Enter] para continuar...")
-            return
-
-        print("Obras disponibles para troceo directo desde .md:")
-        for i, wd in enumerate(registered_works, 1):
-            with open(wd / "metadata.json", "r", encoding="utf-8") as f:
-                meta = json.load(f)
-            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
-
-        try:
-            w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
-            target_work_dir = registered_works[w_idx]
-        except (ValueError, IndexError):
-            print("❌ Selección no válida.")
-            input("\n🔻 Presiona [Enter] para continuar...")
-            return
-
-        from ingest_agent import MOMMultilingualIngestionAgent
-        agent = MOMMultilingualIngestionAgent(data_dir=data_dir)
-        res = agent.ingest_registered_work_from_markdown(target_work_dir)
-        input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
-
-    elif opt == "4":
-        print("\n--- 🚨 EJECUCIÓN DE KILL-SWITCH / REVOCACIÓN DE DIFUSIÓN PÚBLICA ---")
-        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
-        all_works = []
-
-        for ad in author_dirs:
-            for wd in ad.iterdir():
-                if wd.is_dir() and (wd / "metadata.json").exists():
-                    all_works.append(wd)
-
-        if not all_works:
-            print("❌ No hay obras registradas en la biblioteca.")
-            return
-
-        print("Obras registradas:")
-        for i, wd in enumerate(all_works, 1):
-            print(f"  [{i}] {wd.parent.name} / {wd.name}")
-
-        try:
-            w_idx = int(input("Selecciona obra para modificar/revocar: ")) - 1
-            target_work = all_works[w_idx]
-        except (ValueError, IndexError):
-            print("❌ Selección no válida.")
-            return
-
-        meta_file = target_work / "metadata.json"
-        with open(meta_file, "r", encoding="utf-8") as f:
-            meta = json.load(f)
-
-        print(f"\nEstado actual de '{meta.get('work_id')}':")
-        print(f"  • Permitir Texto Literal Público: {meta.get('allow_full_text_export')}")
-        print(f"  • Kill-Switch Activado:          {meta.get('kill_switch_enabled')}")
-
-        if ask_confirmation("¿Deseas ACTIVAR el Kill-Switch y REVOCAR inmediatamente la exportación pública de texto literal?"):
-            meta["allow_full_text_export"] = False
-            meta["kill_switch_enabled"] = True
-            with open(meta_file, "w", encoding="utf-8") as f:
-                json.dump(meta, f, indent=2, ensure_ascii=False)
-            
-            raw_id = meta.get("raw_project_id")
-            if raw_id:
-                raw_json = pm.projects_root / raw_id / "project.json"
-                if raw_json.exists():
-                    with open(raw_json, "r", encoding="utf-8") as f:
-                        rmeta = json.load(f)
-                    rmeta["is_private"] = True
-                    with open(raw_json, "w", encoding="utf-8") as f:
-                        json.dump(rmeta, f, indent=2, ensure_ascii=False)
-                    repo_root = current_dir.parent
-                    append_to_root_gitignore(repo_root, f"data/projects/{raw_id}/")
-                    _untrack_and_purge_private_path(repo_root, f"data/projects/{raw_id}/")
-
-            print("🛑 Kill-Switch activado. La fuente matriz se ha bloqueado como PRIVADA y se purgará la cita literal.")
-            repo_root = current_dir.parent
-            execute_sovereign_git_push(repo_root, f"fix(security): activado kill-switch soberano para obra {meta.get('work_id')}")
+            if ask_confirmation(f"¿⚠️ Estás COMPLETAMENTE SEGURO de eliminar la obra '{meta.get('title')}' y todos sus archivos del disco?"):
+                shutil.rmtree(target_work, ignore_errors=True)
+                print(f"✅ Obra '{meta.get('work_id')}' eliminada correctamente.")
+                
+        elif opt == "0":
+            break
+        else:
+            print("❌ Opción inválida.")
 
 
 def menu_patent_management(data_dir: Path, pm: ProjectManager) -> None:
@@ -1686,6 +1782,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.6
-# File_Version: 0.5.6.0
+# Version: 0.5.7
+# File_Version: 0.5.7.0
 # Schema_Version: 0.5.3
