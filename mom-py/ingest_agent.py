@@ -364,7 +364,6 @@ class MOMMultilingualIngestionAgent:
         trans_md = split_dir / "translation_extracted.md"
 
         if not orig_md.exists():
-            # Buscar cualquier archivo markdown en el directorio
             md_candidates = list(work_dir.glob("*.md")) + list(split_dir.glob("*.md"))
             if md_candidates:
                 orig_md = md_candidates[0]
@@ -626,7 +625,7 @@ def main():
     parser.add_argument("--work", required=True, help="ID corto de la obra (ej. PSS05)")
     parser.add_argument("--title", required=True, help="Título completo de la obra")
     parser.add_argument("--publisher", default="ESA", help="Entidad emisora/editorial")
-    parser.add_argument("--year", type=int, default1991, help="Año de publicación")
+    parser.add_argument("--year", type=int, default=1991, help="Año de publicación")
     parser.add_argument("--license", default="Public Domain", help="Tipo de Licencia")
     parser.add_argument("--public", action="store_true", help="Permitir exportación pública completa")
     parser.add_argument("--spanish-original", action="store_true", help="Indica si el original ya viene en idioma español")
@@ -653,6 +652,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# App Version: 0.5.3
-# Script Version: 0.5.3.0
+# App Version: 0.5.4
+# Script Version: 0.5.4.0
 # Compatible Schema: 0.5.3

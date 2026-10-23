@@ -506,24 +506,57 @@ def menu_bib_management(data_dir: Path, pm: ProjectManager) -> None:
         input("\n🔻 Presiona [Enter] para continuar y regresar al menú...")
 
     elif opt == "3b":
-        print("\n--- 🚀 INGESTA AVANZADA PDF (PyMuPDF + OCR Auto-instalable) ---")
-        pdf_input = input("Introduce la ruta absoluta o relativa al PDF: ").strip()
-        if not pdf_input:
-            print("❌ Ruta de archivo no válida.")
-            return
-        
-        pdf_path = Path(pdf_input).expanduser().resolve()
-        if not pdf_path.exists():
-            print(f"❌ El archivo '{pdf_path}' no existe.")
+        print("\n--- 🚀 INGESTA AVANZADA PDF (PyMuPDF + OCR) SOBRE OBRA REGISTRADA ---")
+        author_dirs = [d for d in bib_dir.iterdir() if d.is_dir()]
+        registered_works = []
+
+        for ad in author_dirs:
+            for wd in ad.iterdir():
+                if wd.is_dir() and (wd / "metadata.json").exists():
+                    registered_works.append(wd)
+
+        if not registered_works:
+            print("❌ No hay obras registradas con metadata.json en la biblioteca.")
+            input("\n🔻 Presiona [Enter] para continuar...")
             return
 
-        out_dir_str = input(f"Carpeta de destino [{pdf_path.parent}]: ").strip()
-        out_dir = Path(out_dir_str).expanduser().resolve() if out_dir_str else pdf_path.parent
+        print("Obras disponibles para ingesta avanzada:")
+        for i, wd in enumerate(registered_works, 1):
+            with open(wd / "metadata.json", "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            print(f"  [{i}] {meta.get('author_id')} / {meta.get('work_id')} - {meta.get('title')}")
+
+        try:
+            w_idx = int(input("\nSelecciona el número de obra a procesar: ")) - 1
+            target_work_dir = registered_works[w_idx]
+        except (ValueError, IndexError):
+            print("❌ Selección no válida.")
+            input("\n🔻 Presiona [Enter] para continuar...")
+            return
+
+        raw_dir = target_work_dir / "raw"
+        pdf_files = list(raw_dir.glob("*.pdf")) + list(raw_dir.glob("*.PDF"))
+
+        if not pdf_files:
+            print(f"❌ No se encontró ningún archivo PDF en la carpeta RAW: {raw_dir}")
+            input("\n🔻 Presiona [Enter] para continuar...")
+            return
+
+        target_pdf = pdf_files[0]
+        split_dir = target_work_dir / "split"
+        split_dir.mkdir(parents=True, exist_ok=True)
+
+        print(f"📄 Procesando PDF encontrado en RAW: {target_pdf.name}")
 
         try:
             from pdf_extractor_advanced import extract_pdf_advanced
-            res_md = extract_pdf_advanced(str(pdf_path), str(out_dir))
-            print(f"✅ Ingesta avanzada completada con éxito: {res_md}")
+            res_md = extract_pdf_advanced(str(target_pdf), str(split_dir))
+            
+            # Guardar como original_extracted.md para integración automática
+            extracted_orig_md = split_dir / "original_extracted.md"
+            shutil.copy(res_md, extracted_orig_md)
+            
+            print(f"✅ Ingesta avanzada completada con éxito: {extracted_orig_md}")
         except Exception as e:
             print(f"❌ Error al ejecutar ingesta avanzada: {e}")
             
@@ -1653,6 +1686,6 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
-# Version: 0.5.5
-# File_Version: 0.5.5.0
+# Version: 0.5.6
+# File_Version: 0.5.6.0
 # Schema_Version: 0.5.3
