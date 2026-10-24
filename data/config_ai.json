@@ -1,0 +1,43 @@
+{
+  "api_base": "http://127.0.0.1:8000/v1",
+  "active_model": "Qwen3.6-35B-A3B",
+  "timeout_seconds": 2,
+  "ai_nodes": [
+    {
+      "id": "local_colibri",
+      "name": "Colibrì Local (iMac)",
+      "engine": "colibri",
+      "endpoint": "http://127.0.0.1:8000/v1",
+      "model": "Qwen3.6-35B-A3B",
+      "install_url": "https://github.com/metsuos/colibri-metsuos",
+      "roles": [
+        "extraction",
+        "segmentation",
+        "translation",
+        "summarization"
+      ]
+    },
+    {
+      "id": "ryzen_jan",
+      "name": "Nodo Ryzen Jan (GPU)",
+      "engine": "jan",
+      "endpoint": "http://192.168.1.50:1337/v1",
+      "model": "Qwen2.5-14B-Instruct",
+      "roles": [
+        "translation",
+        "summarization"
+      ]
+    },
+    {
+      "id": "ryzen_colibri",
+      "name": "Nodo Ryzen Colibrì (NVMe)",
+      "engine": "colibri",
+      "endpoint": "http://192.168.1.51:8080/v1",
+      "model": "Qwen3.8-Flash-Next",
+      "roles": [
+        "segmentation",
+        "verification"
+      ]
+    }
+  ]
+}
